@@ -1,0 +1,47 @@
+[
+	{
+		"Name":"Regular Triangle",
+		"JsonFile": "regular_triangle.json"
+	},
+	{
+		"Name":"Directional Triangle",
+		"JsonFile": "directional_triangle.json"
+	},
+	{
+		"Name":"Little T",
+		"JsonFile": "littlet.json"
+	},
+	{
+		"Name":"Jamaican flag",
+		"JsonFile": "jamaican_flag.json"
+	},
+	{
+		"Name":"Jose",
+		"JsonFile": "jose.json"
+	},
+	{
+		"Name":"House",
+		"JsonFile": "house.json"
+	},
+	{
+		"Name":"Level 53",
+		"JsonFile": "level53.json"
+	},
+	{
+		"Name":"Level 54",
+		"JsonFile": "level54.json"
+	},
+	{
+		"Name":"Level 55",
+		"JsonFile": "level55.json"
+	},
+	{
+		"Name":"Level 56",
+		"JsonFile": "level56.json"
+	},
+	{
+		"Name":"Level 57",
+		"JsonFile": "level57.json"
+	}
+
+]
