@@ -2,7 +2,6 @@ package solver
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 )
 
@@ -136,38 +135,6 @@ func (this *Puzzle) listPossibleEdgesToVisit(from *uint16) []uint16 {
 	return r
 }
 
-type SolutionHandler interface {
-	handleNewSolutionFound(*[]uint16)
-}
-
-type solutionStorer struct {
-	solutions []*Solution
-}
-
-func newSolutionStorer() *solutionStorer {
-	sc := new(solutionStorer)
-	return sc
-}
-func (this *solutionStorer) handleNewSolutionFound(path *[]uint16) {
-	s := make(Solution, len(*path))
-	s = *path
-	this.solutions = append(this.solutions, &s)
-}
-
-type solutionCounter struct {
-	count_solutions int
-}
-
-func newSolutionCounter() *solutionCounter {
-	sc := new(solutionCounter)
-	sc.count_solutions = 0
-	return sc
-}
-
-func (this *solutionCounter) handleNewSolutionFound(path *[]uint16) {
-	this.count_solutions = this.count_solutions + 1
-}
-
 func findSolutions(puzzle *Puzzle, starting *uint16, path []uint16, solution_handler SolutionHandler, level uint16) {
 	path = append(path, *starting)
 	possible_edges := puzzle.listPossibleEdgesToVisit(starting)
@@ -227,10 +194,6 @@ func (this *Solutions) Print(printer SolutionPrinter) error {
 	return nil
 }
 
-func JsonEncodeSolutions(solutions *Solutions) ([]byte, error) {
-	return json.Marshal(solutions)
-}
-
 func GetNumberOfSolutions(puzzle *Puzzle) int {
 	starting_points := puzzle.listStartingPoints()
 	arr_solutions_count := make([]solutionCounter, len(starting_points))
@@ -262,31 +225,4 @@ func removeDuplicates(s []uint16) []uint16 {
 	}
 	s = s[:len(m)]
 	return s
-}
-
-type SolutionPrinter interface {
-	Print(solutions *Solutions)
-}
-
-type JsonPrinter struct{}
-
-func (this JsonPrinter) Print(s *Solutions) {
-	a, _ := json.Marshal(s)
-	fmt.Println(string(a))
-}
-
-type CleanPrinter struct{}
-
-func (this CleanPrinter) Print(s *Solutions) {
-	for _, v := range *s {
-		l := len(v)
-		for k, v1 := range v {
-			if k < l-1 {
-				fmt.Printf("%v - ", v1)
-			} else {
-				fmt.Printf("%v", v1)
-			}
-		}
-		fmt.Println("")
-	}
 }
