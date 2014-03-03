@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"runtime"
-	"star/solver"
+	"github.com/wricardo/OneTDraw-Solver/solver"
 )
 
 var count_only *bool

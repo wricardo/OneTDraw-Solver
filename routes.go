@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/stretchr/goweb"
 	"github.com/stretchr/goweb/context"
+	"github.com/wricardo/OneTDraw-Solver/solver"
 	"io/ioutil"
-	"star/solver"
 )
 
 func mapRoutes() {
