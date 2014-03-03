@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -9,12 +8,14 @@ import (
 	"star/solver"
 )
 
-var count_only *bool;
+var count_only *bool
+var output *string
 
 func main() {
 	var maxprocs = flag.Bool("maxprocs", true, "Pass false to NOT use all CPU cores available")
-	count_only = flag.Bool("count_only", false, "Pass true to display only the count of possible solutions")
 	var puzzle_file_path = flag.String("solve", "", "File path to puzzle to solve")
+	count_only = flag.Bool("count_only", false, "Pass true to display only the count of possible solutions")
+	output = flag.String("output", "clean", "Format of the output. [clean,json]")
 	flag.Parse()
 
 	if *maxprocs == true {
@@ -28,24 +29,26 @@ func main() {
 	}
 }
 
-func createPuzzleByFilename(puzzle_file_path *string) *solver.Puzzle {
+func createPuzzleByFilename(puzzle_file_path *string) (*solver.Puzzle, error) {
 	file_content, _ := ioutil.ReadFile(*puzzle_file_path)
+	return solver.NewPuzzleFromBytes(file_content)
+}
 
-	var puzzle solver.Puzzle
-	err := json.Unmarshal(file_content, &puzzle)
-	if err != nil {
-		fmt.Println("Invalid JSON. Error:", err)
+func getPrinter() solver.SolutionPrinter{
+	if *output == "json" {
+		return solver.JsonPrinter{}
+	}else{
+		return solver.CleanPrinter{}
 	}
-	return &puzzle
 }
 
 func solveFile(puzzle_file_path string) {
-	puzzle := createPuzzleByFilename(&puzzle_file_path)
+	puzzle, _ := createPuzzleByFilename(&puzzle_file_path)
 	if *count_only {
-		fmt.Println(solver.GetNumberOfSolutions(solver.NewPuzzle(puzzle.Edges)))
+		fmt.Println(solver.GetNumberOfSolutions(puzzle))
 	} else {
-		solutions := solver.Solve(solver.NewPuzzle(puzzle.Edges))
-		fmt.Println(*solutions)
+		solutions := solver.Solve(puzzle)
+		solutions.Print(getPrinter())
 	}
 }
 

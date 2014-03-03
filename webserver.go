@@ -19,7 +19,7 @@ type Webserver struct {
 
 func (this *Webserver) init() {
 	this.turnOffAutoEnvelop()
-	mapRoutes() //routes.go
+	mapRoutes()
 	goweb.MapStatic("static/", "static")
 
 	s := &http.Server{
@@ -45,7 +45,6 @@ func (this *Webserver) init() {
 
 	this.registerShutdownFunction(listener, c)
 
-	// begin the server
 	log.Fatalf("Error in Serve: %s", s.Serve(listener))
 }
 
@@ -64,7 +63,6 @@ func (this *Webserver) registerShutdownFunction(listener net.Listener, c chan os
 			log.Print("Tearing down...")
 
 			log.Fatal("Finished - bye bye. ;-)")
-
 		}
 	}()
 }

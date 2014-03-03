@@ -1,6 +1,8 @@
 package solver
 
 import (
+	"encoding/json"
+	"fmt"
 	"sync"
 )
 
@@ -58,10 +60,19 @@ type Puzzle struct {
 	count uint16
 }
 
-func NewPuzzle(edges []Edge) (np Puzzle) {
+func NewPuzzle(edges []Edge) *Puzzle {
 	total_count := countTotalEdges(&edges)
-	np = Puzzle{Edges: edges, count: total_count}
-	return
+	np := Puzzle{Edges: edges, count: total_count}
+	return &np
+}
+
+func NewPuzzleFromBytes(puzzle_bytes []byte) (*Puzzle, error) {
+	var p Puzzle
+	err := json.Unmarshal(puzzle_bytes, &p)
+	if err != nil {
+		return nil, err
+	}
+	return NewPuzzle(p.Edges), nil
 }
 
 func countTotalEdges(edges *[]Edge) (total_count uint16) {
@@ -82,10 +93,7 @@ func (this *Puzzle) Copy() Puzzle {
 }
 
 func (this *Puzzle) isSolved() bool {
-	if this.count > 0 {
-		return false
-	}
-	return true
+	return this.count == 0
 }
 
 func (this *Puzzle) listStartingPoints() []uint16 {
@@ -110,7 +118,7 @@ func (this *Puzzle) getEdge(e1 *uint16, e2 *uint16) *Edge {
 }
 
 func (this *Puzzle) visitEdge(edge *Edge) {
-	this.count--
+	this.count = this.count - 1
 	edge.visit()
 }
 
@@ -138,7 +146,6 @@ type solutionStorer struct {
 
 func newSolutionStorer() *solutionStorer {
 	sc := new(solutionStorer)
-	//	sc.solutions = make([]Solution,0)
 	return sc
 }
 func (this *solutionStorer) handleNewSolutionFound(path *[]uint16) {
@@ -156,6 +163,7 @@ func newSolutionCounter() *solutionCounter {
 	sc.count_solutions = 0
 	return sc
 }
+
 func (this *solutionCounter) handleNewSolutionFound(path *[]uint16) {
 	this.count_solutions = this.count_solutions + 1
 }
@@ -189,7 +197,7 @@ func findSolutions(puzzle *Puzzle, starting *uint16, path []uint16, solution_han
 	}
 }
 
-func Solve (puzzle Puzzle) *[]Solution {
+func Solve(puzzle *Puzzle) *Solutions {
 	starting_points := puzzle.listStartingPoints()
 	arr_solution_storer := make([]solutionStorer, len(starting_points))
 
@@ -202,7 +210,7 @@ func Solve (puzzle Puzzle) *[]Solution {
 	}
 
 	waiting_group.Wait()
-	to_return := make([]Solution, 0)
+	to_return := make(Solutions, 0)
 	for _, solutions := range arr_solution_storer {
 		for _, solution := range solutions.solutions {
 			to_return = append(to_return, *solution)
@@ -212,7 +220,18 @@ func Solve (puzzle Puzzle) *[]Solution {
 	return &to_return
 }
 
-func GetNumberOfSolutions(puzzle Puzzle) int {
+type Solutions []Solution
+
+func (this *Solutions) Print(printer SolutionPrinter) error {
+	printer.Print(this)
+	return nil
+}
+
+func JsonEncodeSolutions(solutions *Solutions) ([]byte, error) {
+	return json.Marshal(solutions)
+}
+
+func GetNumberOfSolutions(puzzle *Puzzle) int {
 	starting_points := puzzle.listStartingPoints()
 	arr_solutions_count := make([]solutionCounter, len(starting_points))
 
@@ -235,7 +254,6 @@ func GetNumberOfSolutions(puzzle Puzzle) int {
 
 func removeDuplicates(s []uint16) []uint16 {
 	m := map[uint16]bool{}
-
 	for _, v := range s {
 		if _, seen := m[v]; !seen {
 			s[len(m)] = v
@@ -244,4 +262,31 @@ func removeDuplicates(s []uint16) []uint16 {
 	}
 	s = s[:len(m)]
 	return s
+}
+
+type SolutionPrinter interface {
+	Print(solutions *Solutions)
+}
+
+type JsonPrinter struct{}
+
+func (this JsonPrinter) Print(s *Solutions) {
+	a, _ := json.Marshal(s)
+	fmt.Println(string(a))
+}
+
+type CleanPrinter struct{}
+
+func (this CleanPrinter) Print(s *Solutions) {
+	for _, v := range *s {
+		l := len(v)
+		for k, v1 := range v {
+			if k < l-1 {
+				fmt.Printf("%v - ", v1)
+			} else {
+				fmt.Printf("%v", v1)
+			}
+		}
+		fmt.Println("")
+	}
 }

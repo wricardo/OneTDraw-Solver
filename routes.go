@@ -12,7 +12,6 @@ import (
 func mapRoutes() {
 	goweb.Map("/", func(c context.Context) error {
 		return goweb.Respond.WithRedirect(c, "/static/ui2.html")
-		//return goweb.Respond.With(c, 200, []byte("Welcome to the Goweb example app - see the terminal for instructions."))
 	})
 
 	goweb.Map("/puzzles", func(c context.Context) error {
@@ -30,11 +29,9 @@ func mapRoutes() {
 	})
 	goweb.Map("/puzzle/solve/{filename}", func(c context.Context) error {
 		filename := fmt.Sprintf("puzzles/%s.json", c.PathParams().Get("filename").Str())
-		fmt.Println(filename)
-		puzzle := createPuzzleByFilename(&filename)
-		solution := solver.Solve(solver.NewPuzzle(puzzle.Edges))
+		puzzle, _ := createPuzzleByFilename(&filename)
+		solution := solver.Solve(puzzle)
 		return goweb.API.RespondWithData(c, solution)
-		//return goweb.Respond.With(c, 404, []byte("ERROR: Invalid JSON"))
 	})
 	goweb.Map("/puzzle/get_points/{filename}", func(c context.Context) error {
 		filename := fmt.Sprintf("puzzles/%s.json", c.PathParams().Get("filename").Str())
@@ -49,7 +46,6 @@ func mapRoutes() {
 			return goweb.Respond.With(c, 404, []byte("ERROR: Invalid JSON"))
 		}
 		return goweb.API.RespondWithData(c, p)
-		//return goweb.Respond.With(c, 404, []byte("ERROR: Invalid JSON"))
 	})
 
 }
