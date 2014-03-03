@@ -37,7 +37,7 @@ func (this *Webserver) init() {
 	if listenErr != nil {
 		log.Fatalf("Could not listen: %s", listenErr)
 	}
-	fmt.Printf("listening on  %s", this.Address)
+	fmt.Printf("Webserver listening on %s", this.Address)
 
 	goweb.Map(func(c context.Context) error {
 		return goweb.API.Respond(c, 404, nil, []string{"File not found"})
