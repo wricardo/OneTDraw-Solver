@@ -1,0 +1,24 @@
+{
+	"Edges": [
+		{
+			"PointA": 1,
+			"PointB": 2,
+			"Count": 1,
+			"Direction": {
+				"From": 1,
+				"To": 2,
+				"Unidirectional": true
+			}
+		},
+		{
+			"PointA": 2,
+			"PointB": 3,
+			"Count": 1
+		},
+		{
+			"PointA": 3,
+			"PointB": 1,
+			"Count": 1
+		}
+	]
+}
