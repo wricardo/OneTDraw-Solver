@@ -144,9 +144,6 @@ func findSolutions(puzzle *Puzzle, starting *uint16, path []uint16, solution_han
 			solution_handler.handleNewSolutionFound(&path)
 		}
 	} else {
-		new_path := make([]uint16, len(path))
-		copy(new_path, path)
-
 		for k, _ := range possible_edges {
 			previous_count := puzzle.count
 			edge := puzzle.getEdge(starting, &possible_edges[k])

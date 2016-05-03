@@ -14,7 +14,7 @@ func newSolutionStorer() *solutionStorer {
 }
 func (this *solutionStorer) handleNewSolutionFound(path *[]uint16) {
 	s := make(Solution, len(*path))
-	s = *path
+	copy(s, *path)
 	this.solutions = append(this.solutions, &s)
 }
 
