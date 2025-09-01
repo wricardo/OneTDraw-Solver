@@ -3,10 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+
 	"github.com/stretchr/goweb"
 	"github.com/stretchr/goweb/context"
 	"github.com/wricardo/OneTDraw-Solver/solver"
-	"io/ioutil"
 )
 
 func mapRoutes() {

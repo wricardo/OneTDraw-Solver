@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
-	"github.com/stretchr/goweb"
-	"github.com/stretchr/goweb/context"
-	"github.com/stretchr/goweb/responders"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/stretchr/goweb"
+	"github.com/stretchr/goweb/context"
+	"github.com/stretchr/goweb/responders"
 )
 
 type Webserver struct {

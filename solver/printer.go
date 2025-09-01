@@ -1,7 +1,8 @@
 package solver
-import(
-	"fmt"
+
+import (
 	"encoding/json"
+	"fmt"
 )
 
 type SolutionPrinter interface {

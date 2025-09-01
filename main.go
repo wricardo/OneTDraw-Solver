@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"runtime"
+
 	"github.com/wricardo/OneTDraw-Solver/solver"
 )
 
@@ -34,10 +35,10 @@ func createPuzzleByFilename(puzzle_file_path *string) (*solver.Puzzle, error) {
 	return solver.NewPuzzleFromBytes(file_content)
 }
 
-func getPrinter() solver.SolutionPrinter{
+func getPrinter() solver.SolutionPrinter {
 	if *output == "json" {
 		return solver.JsonPrinter{}
-	}else{
+	} else {
 		return solver.CleanPrinter{}
 	}
 }
