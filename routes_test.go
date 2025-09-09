@@ -2,14 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"testing"
 )
 
 func TestPuzzlesJSONLoading(t *testing.T) {
 	// Create a temporary puzzles.json file
-	tmpfile, err := ioutil.TempFile("", "puzzles*.json")
+	tmpfile, err := os.CreateTemp("", "puzzles*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +27,7 @@ func TestPuzzlesJSONLoading(t *testing.T) {
 	}
 
 	// Test loading and parsing
-	jsonBlob, err := ioutil.ReadFile(tmpfile.Name())
+	jsonBlob, err := os.ReadFile(tmpfile.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +59,7 @@ func TestPuzzlesJSONLoading(t *testing.T) {
 
 func TestPuzzlePointsLoading(t *testing.T) {
 	// Create a temporary puzzle file with points
-	tmpfile, err := ioutil.TempFile("", "puzzle_points*.json")
+	tmpfile, err := os.CreateTemp("", "puzzle_points*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +83,7 @@ func TestPuzzlePointsLoading(t *testing.T) {
 	}
 
 	// Test loading and parsing
-	jsonBlob, err := ioutil.ReadFile(tmpfile.Name())
+	jsonBlob, err := os.ReadFile(tmpfile.Name())
 	if err != nil {
 		t.Fatal(err)
 	}

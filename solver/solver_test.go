@@ -41,13 +41,13 @@ func TestRemoveDuplicates(t *testing.T) {
 
 func TestVisitEdge(t *testing.T) {
 	e := Edge{PointA: 1, PointB: 2, Count: 1}
-	
+
 	if e.Count != 1 {
 		t.Errorf("Expected Count = 1, got %d", e.Count)
 	}
-	
+
 	e.visit()
-	
+
 	if e.Count != 0 {
 		t.Errorf("Expected Count = 0 after visit, got %d", e.Count)
 	}
@@ -59,16 +59,16 @@ func TestSolveRegularTriangle(t *testing.T) {
 	edges[1] = Edge{PointA: 2, PointB: 3, Count: 1}
 	edges[2] = Edge{PointA: 3, PointB: 1, Count: 1}
 	p := NewPuzzle(edges)
-	
+
 	solutions := Solve(p)
 	if len(*solutions) != 6 {
 		t.Errorf("Expected 6 solutions, got %d", len(*solutions))
 	}
-	
+
 	tmp, _ := json.Marshal(*solutions)
 	encoded := string(tmp)
 	expected := "[[1,2,3,1],[1,3,2,1],[2,1,3,2],[2,3,1,2],[3,2,1,3],[3,1,2,3]]"
-	
+
 	if encoded != expected {
 		t.Errorf("Expected %s, got %s", expected, encoded)
 	}
@@ -80,7 +80,7 @@ func TestGetCountSolutionsRegularTriangle(t *testing.T) {
 	edges[1] = Edge{PointA: 2, PointB: 3, Count: 1}
 	edges[2] = Edge{PointA: 3, PointB: 1, Count: 1}
 	p := NewPuzzle(edges)
-	
+
 	solutions := GetNumberOfSolutions(p)
 	if solutions != 6 {
 		t.Errorf("Expected 6 solutions, got %d", solutions)
@@ -93,16 +93,16 @@ func TestSolveDirectional(t *testing.T) {
 	edges[1] = Edge{PointA: 2, PointB: 3, Count: 1}
 	edges[2] = Edge{PointA: 3, PointB: 1, Count: 1}
 	p := NewPuzzle(edges)
-	
+
 	solutions := Solve(p)
 	if len(*solutions) != 3 {
 		t.Errorf("Expected 3 solutions, got %d", len(*solutions))
 	}
-	
+
 	tmp, _ := json.Marshal(*solutions)
 	encoded := string(tmp)
 	expected := "[[1,2,3,1],[2,3,1,2],[3,1,2,3]]"
-	
+
 	if encoded != expected {
 		t.Errorf("Expected %s, got %s", expected, encoded)
 	}
@@ -111,7 +111,7 @@ func TestSolveDirectional(t *testing.T) {
 func TestEdgeCopy(t *testing.T) {
 	edge := Edge{PointA: 1, PointB: 2, Count: 3, Direction: Direction{From: 1, To: 2, Unidirectional: true}}
 	copy := edge.Copy()
-	
+
 	if copy.PointA != edge.PointA {
 		t.Errorf("PointA not copied correctly")
 	}
@@ -124,7 +124,7 @@ func TestEdgeCopy(t *testing.T) {
 	if !reflect.DeepEqual(copy.Direction, edge.Direction) {
 		t.Errorf("Direction not copied correctly")
 	}
-	
+
 	// Ensure it's a deep copy
 	copy.Count = 5
 	if edge.Count != 3 {
@@ -141,7 +141,7 @@ func TestEdgeCanGoTo(t *testing.T) {
 	if !edge.canGoTo(2, 1) {
 		t.Error("Bidirectional edge should allow 2->1")
 	}
-	
+
 	// Test unidirectional edge
 	uniedge := Edge{PointA: 1, PointB: 2, Count: 1, Direction: Direction{From: 1, To: 2, Unidirectional: true}}
 	if !uniedge.canGoTo(1, 2) {
@@ -150,7 +150,7 @@ func TestEdgeCanGoTo(t *testing.T) {
 	if uniedge.canGoTo(2, 1) {
 		t.Error("Unidirectional edge should not allow 2->1")
 	}
-	
+
 	// Test edge with count 0
 	emptyEdge := Edge{PointA: 1, PointB: 2, Count: 0}
 	if emptyEdge.canGoTo(1, 2) {
@@ -168,14 +168,14 @@ func TestPuzzleCopy(t *testing.T) {
 	}
 	p := NewPuzzle(edges)
 	copy := p.Copy()
-	
+
 	if copy.count != p.count {
 		t.Errorf("Count not copied correctly")
 	}
 	if len(copy.Edges) != len(p.Edges) {
 		t.Errorf("Edges length not copied correctly")
 	}
-	
+
 	// Ensure deep copy
 	copy.Edges[0].Count = 5
 	if p.Edges[0].Count != 1 {
@@ -191,7 +191,7 @@ func TestPuzzleIsSolved(t *testing.T) {
 	if p.isSolved() {
 		t.Error("Puzzle should not be solved initially")
 	}
-	
+
 	p.count = 0
 	if !p.isSolved() {
 		t.Error("Puzzle should be solved when count is 0")
@@ -206,11 +206,11 @@ func TestPuzzleListStartingPoints(t *testing.T) {
 	}
 	p := NewPuzzle(edges)
 	points := p.listStartingPoints()
-	
+
 	if len(points) != 3 {
 		t.Errorf("Expected 3 starting points, got %d", len(points))
 	}
-	
+
 	// Points should be unique
 	seen := make(map[uint16]bool)
 	for _, point := range points {
@@ -228,16 +228,22 @@ func TestPuzzleGetEdge(t *testing.T) {
 		{PointA: 3, PointB: 1, Count: 3},
 	}
 	p := NewPuzzle(edges)
-	
+
 	var a, b uint16
 	a, b = 1, 2
-	edge := p.getEdge(&a, &b)
+	edge, err := p.getEdge(&a, &b)
+	if err != nil {
+		t.Errorf("Expected to find edge, got error: %v", err)
+	}
 	if edge.Count != 1 {
 		t.Errorf("Expected edge count 1, got %d", edge.Count)
 	}
-	
+
 	a, b = 3, 2 // Reverse order should still find the edge
-	edge = p.getEdge(&a, &b)
+	edge, err = p.getEdge(&a, &b)
+	if err != nil {
+		t.Errorf("Expected to find edge, got error: %v", err)
+	}
 	if edge.Count != 2 {
 		t.Errorf("Expected edge count 2, got %d", edge.Count)
 	}
@@ -251,7 +257,7 @@ func TestPuzzleVisitEdge(t *testing.T) {
 	if p.count != 2 {
 		t.Errorf("Expected initial count 2, got %d", p.count)
 	}
-	
+
 	p.visitEdge(&p.Edges[0])
 	if p.count != 1 {
 		t.Errorf("Expected count 1 after visit, got %d", p.count)
@@ -268,7 +274,7 @@ func TestPuzzleListPossibleEdgesToVisit(t *testing.T) {
 		{PointA: 1, PointB: 3, Count: 0}, // Cannot visit
 	}
 	p := NewPuzzle(edges)
-	
+
 	var from uint16 = 1
 	possible := p.listPossibleEdgesToVisit(&from)
 	if len(possible) != 1 {
@@ -277,7 +283,7 @@ func TestPuzzleListPossibleEdgesToVisit(t *testing.T) {
 	if possible[0] != 2 {
 		t.Errorf("Expected possible edge to point 2, got %d", possible[0])
 	}
-	
+
 	from = 2
 	possible = p.listPossibleEdgesToVisit(&from)
 	if len(possible) != 2 {
@@ -288,7 +294,7 @@ func TestPuzzleListPossibleEdgesToVisit(t *testing.T) {
 func TestNewPuzzleFromBytes(t *testing.T) {
 	jsonData := `{"Edges": [{"PointA": 1, "PointB": 2, "Count": 1}]}`
 	p, err := NewPuzzleFromBytes([]byte(jsonData))
-	
+
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -304,7 +310,7 @@ func TestNewPuzzleFromBytes(t *testing.T) {
 	if p.Edges[0].Count != 1 {
 		t.Errorf("Expected Count = 1, got %d", p.Edges[0].Count)
 	}
-	
+
 	// Test invalid JSON
 	invalidJson := `{"invalid": json}`
 	_, err = NewPuzzleFromBytes([]byte(invalidJson))
@@ -323,12 +329,12 @@ func TestSolveComplexPuzzle(t *testing.T) {
 		{PointA: 3, PointB: 4, Count: 1},
 	}
 	p := NewPuzzle(edges)
-	
+
 	solutions := Solve(p)
 	if len(*solutions) == 0 {
 		t.Error("Expected at least one solution")
 	}
-	
+
 	// Verify each solution visits all edges
 	for _, solution := range *solutions {
 		if len(solution) == 0 {
@@ -344,7 +350,7 @@ func TestSolveMultiEdge(t *testing.T) {
 		{PointA: 2, PointB: 3, Count: 1},
 	}
 	p := NewPuzzle(edges)
-	
+
 	solutions := Solve(p)
 	if len(*solutions) != 2 {
 		t.Errorf("Expected 2 solutions, got %d", len(*solutions))
@@ -360,20 +366,117 @@ func TestGetNumberOfSolutionsComplexPuzzle(t *testing.T) {
 		{PointA: 3, PointB: 4, Count: 1},
 	}
 	p := NewPuzzle(edges)
-	
+
 	count := GetNumberOfSolutions(p)
 	if count == 0 {
 		t.Error("Expected at least one solution")
 	}
 }
 
-func BenchmarkLogic(b *testing.B) {
-	edges := make([]Edge, 3)
-	edges[0] = Edge{PointA: 1, PointB: 2, Count: 1}
-	edges[1] = Edge{PointA: 2, PointB: 3, Count: 1}
-	edges[2] = Edge{PointA: 3, PointB: 1, Count: 1}
+func BenchmarkSolveTriangle(b *testing.B) {
+	edges := []Edge{
+		{PointA: 1, PointB: 2, Count: 1},
+		{PointA: 2, PointB: 3, Count: 1},
+		{PointA: 3, PointB: 1, Count: 1},
+	}
+	p := NewPuzzle(edges)
+	
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p := NewPuzzle(edges)
-		_ = Solve(p)
+		pc := p.Copy()
+		_ = Solve(&pc)
+	}
+}
+
+func BenchmarkSolveSquare(b *testing.B) {
+	edges := []Edge{
+		{PointA: 1, PointB: 2, Count: 1},
+		{PointA: 2, PointB: 3, Count: 1},
+		{PointA: 3, PointB: 4, Count: 1},
+		{PointA: 4, PointB: 1, Count: 1},
+	}
+	p := NewPuzzle(edges)
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pc := p.Copy()
+		_ = Solve(&pc)
+	}
+}
+
+func BenchmarkSolveHouse(b *testing.B) {
+	edges := []Edge{
+		{PointA: 1, PointB: 2, Count: 1},
+		{PointA: 1, PointB: 3, Count: 1},
+		{PointA: 2, PointB: 3, Count: 1},
+		{PointA: 2, PointB: 4, Count: 1},
+		{PointA: 3, PointB: 5, Count: 1},
+		{PointA: 4, PointB: 5, Count: 1},
+		{PointA: 3, PointB: 4, Count: 1},
+		{PointA: 2, PointB: 5, Count: 1},
+	}
+	p := NewPuzzle(edges)
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pc := p.Copy()
+		_ = Solve(&pc)
+	}
+}
+
+func BenchmarkGetNumberOfSolutions(b *testing.B) {
+	edges := []Edge{
+		{PointA: 1, PointB: 2, Count: 1},
+		{PointA: 2, PointB: 3, Count: 1},
+		{PointA: 3, PointB: 1, Count: 1},
+	}
+	p := NewPuzzle(edges)
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pc := p.Copy()
+		_ = GetNumberOfSolutions(&pc)
+	}
+}
+
+func BenchmarkPuzzleCopy(b *testing.B) {
+	edges := []Edge{
+		{PointA: 1, PointB: 2, Count: 1},
+		{PointA: 2, PointB: 3, Count: 1},
+		{PointA: 3, PointB: 4, Count: 1},
+		{PointA: 4, PointB: 5, Count: 1},
+		{PointA: 5, PointB: 1, Count: 1},
+	}
+	p := NewPuzzle(edges)
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = p.Copy()
+	}
+}
+
+func BenchmarkRemoveDuplicates(b *testing.B) {
+	input := []uint16{1, 2, 3, 2, 4, 1, 5, 3, 6, 4}
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = removeDuplicates(input)
+	}
+}
+
+func BenchmarkListStartingPoints(b *testing.B) {
+	edges := []Edge{
+		{PointA: 1, PointB: 2, Count: 1},
+		{PointA: 2, PointB: 3, Count: 1},
+		{PointA: 3, PointB: 4, Count: 1},
+		{PointA: 4, PointB: 5, Count: 1},
+		{PointA: 5, PointB: 6, Count: 1},
+		{PointA: 6, PointB: 1, Count: 1},
+	}
+	p := NewPuzzle(edges)
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = p.listStartingPoints()
 	}
 }

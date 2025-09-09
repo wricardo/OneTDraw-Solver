@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"log"
+	"os"
 	"runtime"
 
 	"github.com/wricardo/OneTDraw-Solver/solver"
@@ -31,7 +32,10 @@ func main() {
 }
 
 func createPuzzleByFilename(puzzle_file_path *string) (*solver.Puzzle, error) {
-	file_content, _ := ioutil.ReadFile(*puzzle_file_path)
+	file_content, err := os.ReadFile(*puzzle_file_path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file %s: %w", *puzzle_file_path, err)
+	}
 	return solver.NewPuzzleFromBytes(file_content)
 }
 
@@ -44,7 +48,10 @@ func getPrinter() solver.SolutionPrinter {
 }
 
 func solveFile(puzzle_file_path string) {
-	puzzle, _ := createPuzzleByFilename(&puzzle_file_path)
+	puzzle, err := createPuzzleByFilename(&puzzle_file_path)
+	if err != nil {
+		log.Fatalf("Error loading puzzle: %v", err)
+	}
 	if *count_only {
 		fmt.Println(solver.GetNumberOfSolutions(puzzle))
 	} else {

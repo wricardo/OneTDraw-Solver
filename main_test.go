@@ -1,7 +1,7 @@
 package main
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 
@@ -10,7 +10,7 @@ import (
 
 func TestCreatePuzzleByFilename(t *testing.T) {
 	// Create a temporary test file
-	tmpfile, err := ioutil.TempFile("", "puzzle*.json")
+	tmpfile, err := os.CreateTemp("", "puzzle*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestGetPrinter(t *testing.T) {
 
 func TestSolveFile(t *testing.T) {
 	// Create a temporary test file with a simple triangle puzzle
-	tmpfile, err := ioutil.TempFile("", "puzzle*.json")
+	tmpfile, err := os.CreateTemp("", "puzzle*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestSolveFile(t *testing.T) {
 	solveFile(tmpfile.Name())
 
 	w.Close()
-	out, _ := ioutil.ReadAll(r)
+	out, _ := io.ReadAll(r)
 	os.Stdout = oldStdout
 
 	// Triangle puzzle should have 6 solutions
@@ -148,7 +148,7 @@ func TestMainFlags(t *testing.T) {
 // Benchmark test
 func BenchmarkCreatePuzzleByFilename(b *testing.B) {
 	// Create a temporary test file
-	tmpfile, err := ioutil.TempFile("", "puzzle*.json")
+	tmpfile, err := os.CreateTemp("", "puzzle*.json")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func BenchmarkCreatePuzzleByFilename(b *testing.B) {
 
 // Test helper function
 func createTestPuzzleFile(content string) (string, func()) {
-	tmpfile, err := ioutil.TempFile("", "puzzle*.json")
+	tmpfile, err := os.CreateTemp("", "puzzle*.json")
 	if err != nil {
 		panic(err)
 	}

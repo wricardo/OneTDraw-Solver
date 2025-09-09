@@ -2,10 +2,9 @@ package solver
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 )
-
-var waiting_group sync.WaitGroup
 
 type Solution []uint16
 
@@ -96,7 +95,7 @@ func (this *Puzzle) isSolved() bool {
 }
 
 func (this *Puzzle) listStartingPoints() []uint16 {
-	var sp []uint16
+	sp := make([]uint16, 0, len(this.Edges)*2)
 	for _, edge := range this.Edges {
 		sp = append(sp, edge.PointA)
 		sp = append(sp, edge.PointB)
@@ -105,15 +104,15 @@ func (this *Puzzle) listStartingPoints() []uint16 {
 	return sp
 }
 
-func (this *Puzzle) getEdge(e1 *uint16, e2 *uint16) *Edge {
+func (this *Puzzle) getEdge(e1 *uint16, e2 *uint16) (*Edge, error) {
 	for k, edge := range this.Edges {
 		if edge.PointA == *e1 && edge.PointB == *e2 {
-			return &this.Edges[k]
+			return &this.Edges[k], nil
 		} else if edge.PointA == *e2 && edge.PointB == *e1 {
-			return &this.Edges[k]
+			return &this.Edges[k], nil
 		}
 	}
-	return &this.Edges[0]
+	return nil, errors.New("edge not found")
 }
 
 func (this *Puzzle) visitEdge(edge *Edge) {
@@ -122,7 +121,7 @@ func (this *Puzzle) visitEdge(edge *Edge) {
 }
 
 func (this *Puzzle) listPossibleEdgesToVisit(from *uint16) []uint16 {
-	var r []uint16
+	r := make([]uint16, 0, len(this.Edges))
 	for _, edge := range this.Edges {
 		if edge.PointA == *from && edge.canGoTo(edge.PointA, edge.PointB) {
 			r = append(r, edge.PointB)
@@ -135,7 +134,7 @@ func (this *Puzzle) listPossibleEdgesToVisit(from *uint16) []uint16 {
 	return r
 }
 
-func findSolutions(puzzle *Puzzle, starting *uint16, path []uint16, solution_handler SolutionHandler, level uint16) {
+func findSolutions(puzzle *Puzzle, starting *uint16, path []uint16, solution_handler SolutionHandler, level uint16, wg *sync.WaitGroup) {
 	path = append(path, *starting)
 	possible_edges := puzzle.listPossibleEdgesToVisit(starting)
 
@@ -146,17 +145,20 @@ func findSolutions(puzzle *Puzzle, starting *uint16, path []uint16, solution_han
 	} else {
 		for k, _ := range possible_edges {
 			previous_count := puzzle.count
-			edge := puzzle.getEdge(starting, &possible_edges[k])
+			edge, err := puzzle.getEdge(starting, &possible_edges[k])
+			if err != nil {
+				continue
+			}
 			previous_edgecount := edge.Count
 			puzzle.visitEdge(edge)
 
-			findSolutions(puzzle, &possible_edges[k], path, solution_handler, level+1)
+			findSolutions(puzzle, &possible_edges[k], path, solution_handler, level+1, wg)
 			edge.Count = previous_edgecount
 			puzzle.count = previous_count
 		}
 
 		if level == 1 {
-			waiting_group.Done()
+			wg.Done()
 		}
 	}
 }
@@ -164,16 +166,17 @@ func findSolutions(puzzle *Puzzle, starting *uint16, path []uint16, solution_han
 func Solve(puzzle *Puzzle) *Solutions {
 	starting_points := puzzle.listStartingPoints()
 	arr_solution_storer := make([]solutionStorer, len(starting_points))
+	var wg sync.WaitGroup
 
 	for k, _ := range starting_points {
 		arr_solution_storer[k] = *newSolutionStorer()
-		waiting_group.Add(1)
+		wg.Add(1)
 		path := make([]uint16, 0)
 		pc := puzzle.Copy()
-		go findSolutions(&pc, &starting_points[k], path, &arr_solution_storer[k], 1)
+		go findSolutions(&pc, &starting_points[k], path, &arr_solution_storer[k], 1, &wg)
 	}
 
-	waiting_group.Wait()
+	wg.Wait()
 	to_return := make(Solutions, 0)
 	for _, solutions := range arr_solution_storer {
 		for _, solution := range solutions.solutions {
@@ -194,16 +197,17 @@ func (this *Solutions) Print(printer SolutionPrinter) error {
 func GetNumberOfSolutions(puzzle *Puzzle) int {
 	starting_points := puzzle.listStartingPoints()
 	arr_solutions_count := make([]solutionCounter, len(starting_points))
+	var wg sync.WaitGroup
 
 	for k, _ := range starting_points {
 		arr_solutions_count[k] = *newSolutionCounter()
-		waiting_group.Add(1)
+		wg.Add(1)
 		path := make([]uint16, 0)
 		pc := puzzle.Copy()
-		go findSolutions(&pc, &starting_points[k], path, &arr_solutions_count[k], 1)
+		go findSolutions(&pc, &starting_points[k], path, &arr_solutions_count[k], 1, &wg)
 	}
 
-	waiting_group.Wait()
+	wg.Wait()
 	to_return := 0
 	for _, solutions := range arr_solutions_count {
 		to_return = to_return + solutions.count_solutions
@@ -213,13 +217,13 @@ func GetNumberOfSolutions(puzzle *Puzzle) int {
 }
 
 func removeDuplicates(s []uint16) []uint16 {
-	m := map[uint16]bool{}
+	seen := make(map[uint16]struct{}, len(s))
+	result := make([]uint16, 0, len(s))
 	for _, v := range s {
-		if _, seen := m[v]; !seen {
-			s[len(m)] = v
-			m[v] = true
+		if _, exists := seen[v]; !exists {
+			seen[v] = struct{}{}
+			result = append(result, v)
 		}
 	}
-	s = s[:len(m)]
-	return s
+	return result
 }
