@@ -1,0 +1,1 @@
+function e(...e){return e.filter(Boolean).join(` `)}function t(e,t=Date.now()){let n=Date.parse(e);if(Number.isNaN(n))return``;let r=Math.max(0,Math.round((t-n)/1e3));if(r<60)return`${r}s ago`;let i=Math.round(r/60);if(i<60)return`${i}m ago`;let a=Math.round(i/60);return a<24?`${a}h ago`:`${Math.round(a/24)}d ago`}export{t as n,e as t};

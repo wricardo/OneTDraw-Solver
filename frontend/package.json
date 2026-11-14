@@ -1,0 +1,38 @@
+{
+	"name": "one-t-draw-frontend",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"dev:local": "PUBLIC_GRAPHQL_URL=http://localhost:8090/graphql PUBLIC_WS_URL=ws://localhost:8090/graphql vite dev --host 0.0.0.0 --port 5173",
+		"build": "vite build",
+		"build:static": "npm run build && rm -rf ../static && mkdir -p ../static && cp -R build/. ../static/",
+		"preview": "vite preview",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/kit": "^2.57.0",
+		"@sveltejs/vite-plugin-svelte": "^7.0.0",
+		"@tailwindcss/vite": "^4.3.0",
+		"@testing-library/jest-dom": "^6.6.3",
+		"@testing-library/svelte": "^5.2.8",
+		"jsdom": "^26.1.0",
+		"svelte": "^5.55.2",
+		"svelte-check": "^4.4.6",
+		"tailwindcss": "^4.3.0",
+		"typescript": "^6.0.2",
+		"vite": "^8.0.7",
+		"vitest": "^3.2.4"
+	},
+	"dependencies": {
+		"@urql/svelte": "^5.0.0",
+		"graphql": "^16.14.0",
+		"graphql-ws": "^6.0.8"
+	}
+}

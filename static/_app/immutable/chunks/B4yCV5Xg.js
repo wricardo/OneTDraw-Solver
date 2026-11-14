@@ -1,0 +1,1 @@
+var e=`one-t-draw-admin-key`;function t(){if(typeof sessionStorage>`u`)return``;try{return sessionStorage.getItem(e)??``}catch{return``}}function n(t){if(typeof sessionStorage<`u`)try{t?sessionStorage.setItem(e,t):sessionStorage.removeItem(e)}catch{}}export{n,t};

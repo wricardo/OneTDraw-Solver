@@ -1,0 +1,1 @@
+import"./lZAje_uo.js";import{at as e,nt as t}from"./BlrRlQ0e.js";var n=`$$_urql`,r=()=>t(n),i=t=>{e(n,t)};export{i as n,r as t};

@@ -1,0 +1,7 @@
+/one-t-draw
+/coverage.out
+/sessions/
+/frontend/node_modules/
+/frontend/.svelte-kit/
+/frontend/build/
+.env

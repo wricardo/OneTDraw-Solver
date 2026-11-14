@@ -1,0 +1,314 @@
+scalar Time
+
+"One game on one map. The map is a snapshot taken when the session was created."
+enum Status {
+  "The trail has not been started."
+  READY
+  PLAYING
+  WON
+  LOST
+}
+
+enum LossReason {
+  "The current node has no unused edge left while edges remain."
+  DEAD_END
+}
+
+"How an attempt changed the trail."
+enum StepKind {
+  "Blocked: nothing happened and the move is not counted."
+  NONE
+  "An edge was drawn and its remaining count went down by one."
+  DRAW
+  "The first node of the trail was placed. Not a counted move."
+  START
+}
+
+enum SessionSort {
+  RECENT
+  CREATED
+}
+
+"A node of the map. Node ids are the puzzle's own point numbers."
+type Node {
+  id: Int!
+  "Layout band: nodes sharing a level are drawn on one row. Layout only."
+  level: Int!
+  "Layout position in a normalized 0..1000 square. Layout only."
+  x: Int!
+  y: Int!
+}
+
+"One edge of the map. Count is how many times it must be drawn."
+type Edge {
+  "Index into Map.edges, also the id used by State.remaining."
+  index: Int!
+  a: Int!
+  b: Int!
+  count: Int!
+  "True when the edge may only be drawn from `from` to `to`."
+  oneWay: Boolean!
+  from: Int
+  to: Int
+}
+
+"""
+A cheap pre-flight over the map's graph: whether one trail could cover every
+edge at all, and which nodes it may start from (Euler parity).
+"""
+type Analysis {
+  nodeCount: Int!
+  edgeCount: Int!
+  "Total traversals required (the length of any complete trail)."
+  stepCount: Int!
+  connected: Boolean!
+  "True when the map has one-way edges, which breaks the undirected parity rule."
+  directional: Boolean!
+  "Nodes with an odd degree, ascending. Empty for a closed tour."
+  oddNodes: [Int!]!
+  "Nodes a complete trail may begin at, ascending."
+  startNodes: [Int!]!
+  "CIRCUIT, TRAIL, DIRECTED or IMPOSSIBLE."
+  verdict: String!
+  "One sentence describing the verdict."
+  message: String!
+}
+
+"""
+Public catalog entry: the graph (nodes and edges), no solution.
+parMoves is the length of a complete trail, because every complete trail draws
+exactly the same number of edges.
+"""
+type Map {
+  id: ID!
+  name: String!
+  description: String!
+  difficulty: String!
+  nodeCount: Int!
+  edgeCount: Int!
+  stepCount: Int!
+  levelCount: Int!
+  maxMoves: Int!
+  "A complete trail has this many moves; null when the map cannot be solved."
+  parMoves: Int
+  analysis: Analysis!
+  nodes: [Node!]!
+  edges: [Edge!]!
+}
+
+"Full map for the editor (admin only). Same shape as Map plus the raw config."
+type AdminMap {
+  id: ID!
+  name: String!
+  description: String!
+  difficulty: String!
+  nodeCount: Int!
+  edgeCount: Int!
+  stepCount: Int!
+  levelCount: Int!
+  maxMoves: Int!
+  parMoves: Int
+  analysis: Analysis!
+  nodes: [Node!]!
+  edges: [Edge!]!
+  "The stored JSON: points (with layout levels), edges and move limit."
+  config: MapConfig!
+}
+
+"Isometric-ish layout data for the map's raw points, including hidden spacers."
+type MapPoint {
+  point: Int!
+  level: Int!
+  "True for a layout-only spacer with no edges."
+  hidden: Boolean!
+  x: Int!
+  y: Int!
+}
+
+"One edge as stored in a map definition, including its one-way constraint."
+type ConfigEdge {
+  pointA: Int!
+  pointB: Int!
+  count: Int!
+  from: Int
+  to: Int
+}
+
+"The raw JSON shape of a map, mirroring the puzzle file format."
+type MapConfig {
+  id: ID!
+  name: String!
+  description: String!
+  difficulty: String!
+  maxMoves: Int!
+  points: [MapPoint!]!
+  edges: [ConfigEdge!]!
+}
+
+"One edge in a map definition. Omitting count means 1."
+input EdgeInput {
+  pointA: Int!
+  pointB: Int!
+  count: Int
+  "Optional one-way constraint."
+  direction: DirectionInput
+}
+
+input DirectionInput {
+  from: Int!
+  to: Int!
+  unidirectional: Boolean!
+}
+
+input PointInput {
+  point: Int!
+  level: Int
+  hide: Boolean
+}
+
+input MapInput {
+  id: ID!
+  name: String!
+  description: String
+  difficulty: String
+  levels: Int
+  maxMoves: Int
+  points: [PointInput!]
+  edges: [EdgeInput!]!
+}
+
+"The trail's state. Mirrors engine.State."
+type GameState {
+  "Current node; null before the trail starts."
+  pos: Int
+  status: Status!
+  lossReason: LossReason
+  "Edges drawn so far (blocked attempts are free)."
+  moves: Int!
+  "Rejected attempts so far."
+  blocked: Int!
+  "Traversals still owed."
+  remaining: Int!
+  "The nodes of the trail in order; empty before it starts."
+  path: [Int!]!
+  "Traversals still owed per edge, indexed like Map.edges."
+  usage: [Int!]!
+}
+
+"One attempted step."
+type StepEvent {
+  "Drawn-move index after this attempt (unchanged when blocked)."
+  move: Int!
+  "The node the player tried to reach."
+  node: Int!
+  from: Int
+  to: Int
+  kind: StepKind!
+  "The edge drawn, or null when blocked."
+  edge: Int
+  blocked: Boolean!
+  "Why the attempt was blocked; null when it succeeded."
+  reason: String
+  status: Status!
+  lossReason: LossReason
+}
+
+"A completion plan computed by the solver."
+type Plan {
+  "The node the trail begins at."
+  start: Int!
+  "Nodes to travel to, in order, starting from start."
+  steps: [Int!]!
+  found: Boolean!
+  "ISO-8601 time the plan was computed."
+  computedAt: Time!
+}
+
+type Session {
+  id: ID!
+  displayName: String!
+  mapId: ID!
+  "Catalog entry of the map this session plays."
+  map: Map!
+  state: GameState!
+  "Increments on every change; clients ignore updates with seq <= last seen."
+  seq: Int!
+  createdAt: Time!
+  lastActionAt: Time!
+  "Finished games (won or lost) in this session."
+  attempts: Int!
+  "Fewest moves in a won game of this session."
+  bestMoves: Int
+  lastEvent: StepEvent
+  "The last solver plan attached with solve(), if any."
+  lastPlan: Plan
+  "True when the built-in solver is driving this session."
+  autoPlay: Boolean!
+}
+
+type SessionUpdate {
+  seq: Int!
+  session: Session!
+  event: StepEvent
+}
+
+type MapValidationIssue {
+  message: String!
+}
+
+type MapValidationResult {
+  valid: Boolean!
+  issues: [MapValidationIssue!]!
+  "Set when the map parses but no single trail can cover every edge."
+  solvable: Boolean!
+  parMoves: Int
+  "CIRCUIT, TRAIL, DIRECTED or IMPOSSIBLE when the map parses; null otherwise."
+  verdict: String
+}
+
+type Query {
+  "Public catalog: the graph of every map."
+  maps: [Map!]!
+  map(id: ID!): Map
+  "Admin (X-Admin-Key): the full map definition, for the map editor."
+  adminMap(id: ID!): AdminMap
+  session(id: ID!): Session
+  sessions(sort: SessionSort = RECENT, limit: Int = 50, mapId: ID): [Session!]!
+  "The next node on a completion, without changing the game."
+  hint(sessionID: ID!): Plan
+}
+
+type Mutation {
+  createSession(mapID: ID!, displayName: String): Session!
+  deleteSession(id: ID!): Boolean!
+  renameSession(id: ID!, displayName: String!): Session!
+
+  "Place the first node of the trail."
+  start(sessionID: ID!, node: Int!): Session!
+  "Draw one edge to node. A blocked attempt succeeds but changes nothing."
+  move(sessionID: ID!, node: Int!): Session!
+  """
+  Draw several nodes in order; stops early once the game is WON or LOST. With
+  stopOnBlocked (the default) it also stops at the first blocked step, so a
+  wrong plan cannot keep running from the wrong node: check lastEvent.blocked
+  and state.pos, then send a corrected plan.
+  """
+  bulkMove(sessionID: ID!, nodes: [Int!]!, stopOnBlocked: Boolean = true): Session!
+  "Take back the last drawn edge."
+  undo(sessionID: ID!): Session!
+  "Back to an unstarted trail on the same map; keeps attempts and bestMoves."
+  reset(sessionID: ID!): Session!
+  "Compute and attach a full completion plan for the current trail."
+  solve(sessionID: ID!): Session!
+
+  "Admin (X-Admin-Key) mutations."
+  createMap(map: MapInput!): AdminMap!
+  updateMap(map: MapInput!): AdminMap!
+  deleteMap(id: ID!): Boolean!
+  validateMap(map: MapInput!): MapValidationResult!
+}
+
+type Subscription {
+  "Emits the current snapshot immediately, then every change."
+  sessionUpdated(sessionID: ID!): SessionUpdate!
+}

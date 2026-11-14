@@ -380,7 +380,7 @@ func BenchmarkSolveTriangle(b *testing.B) {
 		{PointA: 3, PointB: 1, Count: 1},
 	}
 	p := NewPuzzle(edges)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pc := p.Copy()
@@ -396,7 +396,7 @@ func BenchmarkSolveSquare(b *testing.B) {
 		{PointA: 4, PointB: 1, Count: 1},
 	}
 	p := NewPuzzle(edges)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pc := p.Copy()
@@ -416,7 +416,7 @@ func BenchmarkSolveHouse(b *testing.B) {
 		{PointA: 2, PointB: 5, Count: 1},
 	}
 	p := NewPuzzle(edges)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pc := p.Copy()
@@ -431,7 +431,7 @@ func BenchmarkGetNumberOfSolutions(b *testing.B) {
 		{PointA: 3, PointB: 1, Count: 1},
 	}
 	p := NewPuzzle(edges)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pc := p.Copy()
@@ -448,7 +448,7 @@ func BenchmarkPuzzleCopy(b *testing.B) {
 		{PointA: 5, PointB: 1, Count: 1},
 	}
 	p := NewPuzzle(edges)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = p.Copy()
@@ -457,7 +457,7 @@ func BenchmarkPuzzleCopy(b *testing.B) {
 
 func BenchmarkRemoveDuplicates(b *testing.B) {
 	input := []uint16{1, 2, 3, 2, 4, 1, 5, 3, 6, 4}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = removeDuplicates(input)
@@ -474,7 +474,7 @@ func BenchmarkListStartingPoints(b *testing.B) {
 		{PointA: 6, PointB: 1, Count: 1},
 	}
 	p := NewPuzzle(edges)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = p.listStartingPoints()

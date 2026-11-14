@@ -1,0 +1,160 @@
+# One T Draw — LLM Guide
+
+One T Draw is a single-stroke graph puzzle for humans and AI agents. A map is a graph of
+**nodes** joined by **edges**. Your job is to draw one continuous trail that covers **every edge
+exactly as many times as that edge's count says**. You may revisit nodes freely; you may not
+redraw an exhausted edge, and a trail that gets stuck with edges still owed is a dead end.
+
+Humans: open {{.BaseURL}}/ , pick a map and click nodes in order. Tutorial: {{.BaseURL}}/learn
+Spectate a session live: {{.BaseURL}}/watch/SESSION_ID
+Watch the solver: {{.BaseURL}}/solver
+
+GraphQL endpoint:       POST {{.BaseURL}}/graphql
+GraphQL subscriptions:  {{.WSURL}}/graphql  (graphql-ws protocol)
+Playground:             GET  {{.BaseURL}}/playground
+Introspection:          enabled unless the operator disabled it — query __schema/__type
+
+Every example below is valid against the live schema. Replace SESSION_ID with an id returned by
+`createSession` and MAP_ID with an id from the `maps` query.
+
+---
+
+## Rules
+
+- A map is a graph. `Map.nodes` gives every node with its id; `Map.edges` gives every edge with
+  `a`, `b`, `count` and, for a one-way edge, `oneWay: true` plus `from`/`to`.
+- A session is one game on one map. The map is snapshotted when the session is created.
+- Your trail is an ordered list of node ids. You **start** by placing the first node
+  (`start(sessionID, node)`), which is **not** a counted move, then **move** to a neighbour
+  (`move(sessionID, to)`) for each edge you draw.
+- Drawing an edge subtracts one from that edge's remaining count. Every drawn edge counts as one
+  move. `state.usage` lists the traversals still owed per edge, indexed like `Map.edges`.
+- A move is **blocked** when the two nodes are not joined, when that edge is already fully drawn,
+  or when the edge is one-way and you walked it backwards. A blocked attempt changes nothing, is
+  **not** counted, and does not end the game. `lastEvent.blocked` is true and `lastEvent.reason`
+  says why.
+- **Win** by drawing the last owed traversal. `status` becomes `WON`.
+- **Lose** only by getting stuck: when the node you stand on has no usable edge left while edges
+  remain, `status` becomes `LOST` with `lossReason: DEAD_END`. Use `undo` or `reset` to recover.
+- `parMoves` is the length of a complete trail. Because every complete trail draws exactly the
+  same edges, there is only one possible length: solving means drawing exactly `parMoves` edges,
+  no more and no less.
+- `analysis` is a cheap pre-flight. `verdict` is one of:
+  - `CIRCUIT` — a closed tour exists, so **any** node may start.
+  - `TRAIL` — an open trail exists; it **must** start at one of `analysis.oddNodes`.
+  - `DIRECTED` — the map has one-way edges, so the parity argument does not apply; the start
+    point depends on direction and `analysis.startNodes` lists every node with an edge.
+  - `IMPOSSIBLE` — no single trail can cover every edge. The map cannot be solved; `parMoves` is
+    null. (One bundled map, `jose`, is deliberately impossible.)
+- `status`: READY (no node placed), PLAYING, WON, LOST. WON and LOST sessions refuse moves
+  (`SESSION_TERMINAL`) until `reset`.
+
+### Step events
+
+`lastEvent` describes the last attempt: `move` (drawn-move index), `node` (the node you tried to
+reach), `from`, `to`, `kind` (NONE, DRAW or START), `edge` (the edge drawn, null when blocked),
+`blocked`, `reason`, `status`, `lossReason`. A blocked attempt still bumps the session `seq` so
+watchers see it. `state.path` lists the nodes of the trail in order.
+
+### The solver
+
+The same engine that scores your game can solve it:
+
+- `solve(sessionID)` attaches a full completion plan for the **current** trail: `lastPlan` has
+  `start` and the `steps` to travel to. Playing those steps with `bulkMove` wins.
+  `solve` on a fresh session also picks a legal start node for you.
+- `hint(sessionID)` returns the next node on a completion without changing the game.
+- These are hints, not a shortcut around the rules: you still have to draw the edges.
+
+### Errors
+
+Errors carry `extensions.code`: NOT_FOUND, SESSION_TERMINAL, INVALID_ARGUMENT, FORBIDDEN,
+LIMIT_REACHED. Admin operations (map editing, `adminMap`) need an `X-Admin-Key` header and are
+not for players. At most 20000 nodes per `bulkMove` call.
+
+---
+
+## Quick start
+
+1. List maps (the full graph of each):
+
+```graphql
+query { maps { id name difficulty nodeCount edgeCount stepCount parMoves analysis { verdict message oddNodes startNodes } } }
+```
+
+2. Read one map's graph when you need the edges:
+
+```graphql
+query { map(id: "MAP_ID") { id name nodeCount edgeCount stepCount parMoves analysis { verdict oddNodes startNodes } nodes { id level x y } edges { index a b count oneWay from to } } }
+```
+
+3. Create a session:
+
+```graphql
+mutation { createSession(mapID: "MAP_ID", displayName: "my agent") { id state { status moves remaining } map { stepCount parMoves analysis { verdict startNodes } } } }
+```
+
+4. Place the first node (the parity rule tells you which nodes are legal):
+
+```graphql
+mutation { start(sessionID: "SESSION_ID", node: 4) { seq state { pos status moves remaining path } lastEvent { kind blocked reason } } }
+```
+
+5. Draw edges one at a time:
+
+```graphql
+mutation { move(sessionID: "SESSION_ID", node: 5) { seq state { pos status moves remaining usage } lastEvent { blocked reason edge } } }
+```
+
+6. Or send a whole planned route. It stops early once the game is WON or LOST and, by default, at
+   the first blocked step, so a wrong plan cannot keep running from the wrong node: check
+   `lastEvent.blocked` and `state.pos`, then send a corrected plan. Pass `stopOnBlocked: false` to
+   skip blocked steps and carry on:
+
+```graphql
+mutation { bulkMove(sessionID: "SESSION_ID", nodes: [5, 2, 1, 3]) { state { pos status moves remaining } lastEvent { blocked reason } attempts bestMoves } }
+```
+
+7. Undo, reset, or ask for the solution:
+
+```graphql
+mutation { undo(sessionID: "SESSION_ID") { state { pos moves remaining } lastEvent { edge } } }
+mutation { reset(sessionID: "SESSION_ID") { state { status moves remaining } attempts bestMoves } }
+mutation { solve(sessionID: "SESSION_ID") { lastPlan { start steps found } state { status } } }
+```
+
+```graphql
+query { hint(sessionID: "SESSION_ID") { start steps found } }
+```
+
+8. Read or watch the session:
+
+```graphql
+query { session(id: "SESSION_ID") { seq attempts bestMoves state { pos status moves remaining path usage } lastEvent { blocked reason } } }
+```
+
+```graphql
+subscription { sessionUpdated(sessionID: "SESSION_ID") { seq event { move node blocked kind edge } session { state { pos status moves remaining } lastPlan { steps } } } }
+```
+
+The subscription emits the current snapshot immediately, then every change. Every update is a full
+snapshot; ignore updates whose `seq` is not greater than the last one you saw.
+
+Other session calls: `renameSession(id, displayName)`, `deleteSession(id)`. Query
+`sessions(sort: RECENT, limit: 50, mapId: "...")` lists sessions.
+
+---
+
+## Tips
+
+- Do the Euler analysis first, it is free. `analysis.verdict` plus `analysis.oddNodes` usually
+  tells you where the trail must start before you draw anything.
+- Count the edges: a complete trail is exactly `parMoves` moves long. If you have drawn more than
+  `parMoves` you have gone wrong (a repeated edge), and `undo` is cheaper than starting over.
+- One-way edges are one traversal direction only. Walking a one-way edge backwards is a blocked
+  attempt, not a loss, so probing costs nothing but a bump.
+- Think of an edge with `count: 2` as two parallel edges you must both use. A doubled edge is
+  usually the bridge that makes an otherwise impossible figure work.
+- If you get stuck with edges left, you stranded a group of edges behind you: `undo` back to the
+  branching point and take the other branch. `hint` will tell you where to go.
+- `state.usage` is the ground truth for "how many times may I still cross this edge".

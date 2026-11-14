@@ -1,72 +1,29 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"net"
-	"net/http"
-	"os"
-	"os/signal"
-	"time"
-
 	"github.com/stretchr/goweb"
-	"github.com/stretchr/goweb/context"
+	"github.com/stretchr/goweb/handlers"
 	"github.com/stretchr/goweb/responders"
 )
 
-type Webserver struct {
-	Address string
-}
-
-func (this *Webserver) init() {
-	this.turnOffAutoEnvelop()
+// legacyHandler installs the original OneTDraw solver REST routes on the goweb
+// default handler and returns it. The routes stay available at their historical
+// paths (/puzzles, /puzzle/...) so anything that already talks to them keeps
+// working, while the game itself is served by the GraphQL API and SPA.
+//
+// The solver's own UI lives in legacy-static/ rather than static/ so the
+// SvelteKit build (which wipes and fills static/) can never clobber it.
+func legacyHandler() *handlers.HttpHandler {
+	turnOffAutoEnvelop()
 	mapRoutes()
-	goweb.MapStatic("static/", "static")
-
-	s := &http.Server{
-		Addr:        this.Address,
-		Handler:     goweb.DefaultHttpHandler(),
-		ReadTimeout: 10 * time.Second,
-		// No WriteTimeout: solving a large puzzle legitimately takes longer than
-		// a normal request, and a write deadline here silently truncates the
-		// response mid-body instead of reporting the delay. The solve routes
-		// enforce their own search budget and honour client disconnects.
-		MaxHeaderBytes: 1 << 20,
-	}
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	listener, listenErr := net.Listen("tcp", this.Address)
-
-	if listenErr != nil {
-		log.Fatalf("Could not listen: %s", listenErr)
-	}
-	fmt.Printf("Webserver listening on %s", this.Address)
-
-	goweb.Map(func(c context.Context) error {
-		return goweb.API.Respond(c, 404, nil, []string{"File not found"})
-	})
-
-	this.registerShutdownFunction(listener, c)
-
-	log.Fatalf("Error in Serve: %s", s.Serve(listener))
+	goweb.MapStatic("legacy-static/", "legacy-static")
+	return goweb.DefaultHttpHandler()
 }
 
-func (this *Webserver) turnOffAutoEnvelop() {
+// turnOffAutoEnvelop stops goweb wrapping every JSON response in an envelope
+// object, which would break clients decoding the handler's own structs.
+func turnOffAutoEnvelop() {
 	apiResponder := responders.NewGowebAPIResponder(goweb.CodecService, goweb.Respond)
 	apiResponder.AlwaysEnvelopResponse = false
 	goweb.API = apiResponder
-}
-
-func (this *Webserver) registerShutdownFunction(listener net.Listener, c chan os.Signal) {
-	go func() {
-		for _ = range c {
-			log.Print("Stopping the server...")
-			listener.Close()
-
-			log.Print("Tearing down...")
-
-			log.Fatal("Finished - bye bye. ;-)")
-		}
-	}()
 }

@@ -1,139 +1,144 @@
-# OneTDraw-Solver
+# One T Draw
 
-A high-performance Go-based algorithm implementation that solves OneTDraw puzzles - graph traversal puzzles where edges must be visited exactly once. This project was created as a collaborative challenge between [@adarqui](https://github.com/adarqui) and [@wricardo](https://github.com/wricardo), inspired by the iPhone game "One T Draw".
+A single-stroke graph puzzle, playable by **humans and AI alike** — and solvable by brute force.
 
-<img width="409" height="512" alt="Screenshot 2025-09-01 at 6 39 17 AM" src="https://github.com/user-attachments/assets/5cf503cd-e447-4de4-8b5e-910d8b586837" />
+A map is a graph of **nodes** joined by **edges**. Your job is to draw **one continuous trail** that
+covers **every edge exactly as many times as its count says**. You may revisit nodes freely; you may
+not redraw a spent edge; get stuck with edges still owed and the trail is dead.
 
-## Features
+Humans play in the browser by clicking nodes. AI agents play the same game through a public
+**GraphQL API**: they read the graph, draw edges, and check the result. A human and an AI can share a
+session, and anyone can watch it live. The solver is part of the game: press **S** and the same
+engine that judges your run finds a completion.
 
-- **High-Performance Solver**: concurrent goroutines with recursive backtracking and dead-branch pruning, so puzzles with 90k+ solutions finish in well under a second
-- **Bounded and cancellable searches**: every search accepts a time budget, a solution cap, and a stop signal, and reports whether it can be trusted as complete
-- **Web Interface**: interactive graph visualization with live progress while searching, a Stop button, route-by-route playback, and a paged gallery of solutions
-- **Pre-flight analysis**: tells you before solving whether a single path can exist at all, and where it must start (Euler parity and connectivity)
-- **Multiple Output Formats**: Clean text or JSON output
-- **Flexible Puzzle Format**: JSON-based puzzle definition with support for directional constraints
-- **Comprehensive Test Suite**: unit tests, route tests, and benchmarking
+`./one-t-draw -solve puzzles/house.json` still does exactly what this repository always did: it
+brute-forces a puzzle file and prints every walk.
 
-## How It Works
+## How it works
 
-The solver runs one goroutine per starting point, each doing depth-first search with backtracking. Two things make it fast on large puzzles:
+| Action | What happens |
+|---|---|
+| Click a node (unstarted) | Places the first node of the trail. Not a counted move. |
+| Click a neighbouring node | Draws that edge if it has traversals left. One move. |
+| Click a non-neighbour | Blocked: nothing changes, nothing is counted. |
+| Draw the last owed edge | You win. |
+| Get stuck with edges left | You lose (`DEAD_END`). Undo or reset. |
 
-- **Dead-branch pruning**: after every step it checks whether the edges still owed can all still be reached. If the unused edges have split into two disconnected groups, no continuation can cover them all, so the whole subtree is abandoned. This only discards branches with provably zero completions, so the solutions found are unchanged.
-- **Bounded search**: a search can be limited by time, by a solution cap, or cancelled outright. Because these puzzles produce astronomically many walks on the larger levels, the web UI streams progress while searching and lets you stop, instead of blocking on a request that may never finish.
+- An edge labelled **2** must be drawn twice. Spent edges turn grey.
+- A **one-way** edge can only be drawn in its arrow's direction.
+- Every complete trail has the **same length**, because every solution draws exactly the same edges
+  the same number of times. That number is the map's `parMoves`.
 
-Solutions are also deduplicated: two walks that draw the same lines (one being the other reversed, or — for closed tours — a rotation of it) count once.
+## The parity analysis
 
-## Usage
+Before you draw, the map is classified:
 
-### Web Interface (Default)
+| Verdict | Meaning |
+|---|---|
+| `CIRCUIT` | A closed tour exists, so **any** node may start. |
+| `TRAIL` | An open trail exists; it **must** start at one of the odd-degree nodes. |
+| `DIRECTED` | The map has one-way edges, so parity does not decide; search does. |
+| `IMPOSSIBLE` | No single trail can cover every edge. One map, `jose`, is like this on purpose. |
 
-Start the web server to visualize and solve puzzles interactively:
+## Maps
 
-```bash
-go run main.go
-# Server starts on http://localhost:8090
+Eleven maps ship with the game, ordered easy to hard: **Regular Triangle**, **Directional
+Triangle**, **Little T**, **Jamaican Flag**, **Jose**, **House**, **Level 53–57**. Each map file is a
+graph with layout hints; `make validate` checks every map and its reference solution.
+
+## Playing with AI
+
+**1. Copy the prompt from the game.** Start a game in the browser and click **Play with an AI**. It
+copies a ready-made prompt with the session and the calls the agent needs. Paste it into an agent
+with web access, then watch the session live.
+
+**2. Point an agent at the API.** The game publishes a guide for AI agents at `/llms.txt`, with the
+rules, endpoints and examples for every call.
+
+The API is plain GraphQL at `/graphql`. A game takes three calls:
+
+```graphql
+query    { maps { id name difficulty stepCount parMoves analysis { verdict oddNodes startNodes } } }  # 1. pick a map
+mutation { createSession(mapID: "house") { id state { status } } }                                    # 2. start a game
+mutation { start(sessionID: "…", node: 4) { state { pos status } } }                                  # 3. place the pen
+mutation { bulkMove(sessionID: "…", nodes: [5,2,1,3,2,4,3,5]) { state { status moves remaining } } }   # 4. draw
 ```
 
-The UI shows the graph with a pre-flight analysis, then streams the search with live progress. Pick a search budget from the toolbar, and press **Stop** at any time — the routes found so far are kept.
+The solver is on the same API: `solve(sessionID)` attaches a completion plan and `hint(sessionID)`
+returns the next node without changing the game.
 
-### Command Line Solving
+## Running it
 
-```bash
-# Solve and show all solutions
-go run main.go -solve puzzles/house.json
-
-# Count solutions only
-go run main.go -solve puzzles/house.json -count_only
-
-# Stop after 10s and report what was found (useful for the biggest levels)
-go run main.go -solve puzzles/level54.json -count_only -budget 10s
-
-# JSON output format
-go run main.go -solve puzzles/house.json -output json
+```sh
+make run                 # builds and serves http://localhost:8090
+make dev                 # run from source with debug logging
+make build-frontend      # rebuild the SvelteKit UI into static/
+make validate            # check every map and reference solution
+make test                # go test -race ./...
+make verify              # gofmt check, vet, test, frontend check
 ```
 
-The CLI prints a one-line analysis to stderr and keeps stdout clean, so `-count_only` and `-output json` stay machine-readable. If a search does not finish within `-budget`, the count is reported as a lower bound.
+CLI mode is unchanged:
 
-### Puzzle Format
-
-Puzzles are defined in JSON format with points and edges:
-
-```json
-{
-  "Points": [
-    {"Point": 1, "Level": 1},
-    {"Point": 2, "Level": 2}
-  ],
-  "Edges": [
-    {
-      "PointA": 1,
-      "PointB": 2,
-      "Count": 1,
-      "Direction": "optional_constraint"
-    }
-  ]
-}
+```sh
+./one-t-draw -solve puzzles/house.json                    # every walk
+./one-t-draw -solve puzzles/house.json -count_only        # just the count
+./one-t-draw -solve puzzles/level54.json -budget 10s      # stop early
+./one-t-draw -solve puzzles/house.json -output json       # JSON
 ```
 
-- `Points`: Graph vertices with optional level information for visualization
-- `Edges`: Connections between points
-  - `Count`: Number of times the edge must be traversed
-  - `Direction`: Optional unidirectional constraint
-
-## Example Puzzles
-
-The repository includes various puzzle examples in the `puzzles/` directory:
-
-- `house.json` - Classic house drawing puzzle
-- `regular_triangle.json` - Simple triangle
-- `jamaican_flag.json` - Flag pattern
-- `level53.json` through `level57.json` - Game levels
-
-## Development
-
-### Testing
-
-```bash
-# Run tests
-go test ./solver
-
-# Run benchmarks
-go test -bench=. ./solver
-```
-
-### Code Formatting
-
-```bash
-# Format and fix imports
-goimports -w .
-```
-
-## Dependencies
-
-- `github.com/stretchr/goweb` - Web framework
-- `launchpad.net/gocheck` - Testing framework
+Environment: `.env.example` documents `ADMIN_API_KEY`, `ALLOWED_ORIGINS`, `MAX_SESSIONS`,
+`SESSION_TTL`, and the GraphQL flags.
 
 ## Architecture
 
-- **`solver/`**: core algorithm. `solver.go` holds the search and its bounds, `analyze.go` holds the pre-flight analysis and solution deduplication
-- **`webserver.go`**: HTTP server
-- **`routes.go`**: the API, including the streaming solve/count endpoints
-- **`static/index.html`**: the UI, a single self-contained page (no external CDNs)
-- **`puzzles/`**: example puzzle definitions
+```
+HTTP /graphql (api/server.go) → gqlgen resolver (graph/) → service.GameService (game/service)
+   → engine (pure rules) ; step → touch(Seq++) → Clone → persist → broadcast
+   → websocket.Hub → graph/subscription_forward.go → graphql-ws → frontend store
+```
 
-### API
+| Path | Purpose |
+|---|---|
+| `game/engine` | Rules: map parsing, analysis, the trail state, the planner |
+| `game/service` | Sessions and maps; the only layer that mutates a live game |
+| `game/config` | File-backed map store (`maps/*.json`) |
+| `game/session` | In-memory registry + `sessions/<id>.json` persistence |
+| `transport/websocket` | Snapshot fan-out hub |
+| `graph/` | `schema.graphqls`, resolvers, conversion; `generated/`, `model/` are gqlgen output |
+| `api/` | mux, body/complexity caps, `/llms.txt`, SPA fallback, legacy solver routes |
+| `frontend/` | SvelteKit 5 + Tailwind v4; builds into `static/` (committed) |
+| `solver/` | The original walk enumerator behind `-solve` and `/puzzle/*` |
+| `validate/`, `cmd/validate` | Map + reference-solution checks |
+| `maps/`, `solutions/`, `puzzles/` | Data |
 
-| Route | Purpose |
-| --- | --- |
-| `GET /puzzles` | Puzzle list, each with its size and solvability verdict |
-| `GET /puzzle/data/{name}` | Geometry plus analysis, for drawing the board |
-| `GET /puzzle/stream/{name}` | NDJSON stream: `progress`/`heartbeat` lines, then a `result` line |
-| `GET /puzzle/solve/{name}` | One-shot JSON result |
-| `GET /puzzle/count/{name}` | NDJSON stream of an exhaustive count |
-| `POST /puzzle/stop/{session}` | Ask a running stream to finish early and still return its results |
+### The planner
 
-Both streaming routes accept `?budgetMs=`, and `/puzzle/stream/` also accepts `?limit=`. A stream is cancelled automatically if the client disconnects, so an abandoned tab does not leave a search burning CPU.
+`engine.Plan` searches for a completion from whatever trail state it is given:
 
-## Contributing
+- **Dead-branch pruning.** If the edges still owed can no longer all be reached from the pen, the
+  branch is abandoned.
+- **Parity pruning.** With only undirected edges left, a completion leaves zero or two odd-degree
+  nodes, and if two the pen is on one of them. With only one-way edges left it uses the directed
+  balance test. With both, no sound static test exists, so nothing is pruned.
+- **Memoisation.** A state is (position, remaining traversals per edge); a subtree proven dead is
+  never explored twice.
+- **Warnsdorff ordering.** Forced corridors are tried before open rooms.
 
-This project uses GOPATH-style Go modules. Contributions welcome - feel free to add new puzzles, improve the algorithm, or enhance the web interface.
+Neither pruning rule can discard a real solution, so `Plan` returning `found: false` means there is
+none.
+
+### Layout
+
+Map files carry a `Level` per point, which is a hint rather than a geometry: several nodes often
+share a level, and one map has no levels at all. Placing each level on a row drew those nodes in a
+straight line and collapsed a triangle into one segment. `computeLayout` therefore seeds the rows and
+then runs a fixed number of deterministic force-relaxation iterations (springs along edges,
+repulsion between all pairs, a weak pull to the seed row). No randomness, so a map looks the same on
+every load and in every client.
+
+## About
+
+One T Draw is part of **Dr Brain**, a collection of browser brain games. The original solver was a
+collaborative challenge between [@adarqui](https://github.com/adarqui) and
+[@wricardo](https://github.com/wricardo), inspired by the iPhone game "One T Draw".

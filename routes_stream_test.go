@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,18 +14,14 @@ import (
 	"github.com/stretchr/goweb"
 )
 
-// newTestServer starts the real route table on a test server, so these tests
-// exercise the same handlers the browser talks to. The default handler is reset
-// first so each test gets a clean route table rather than accumulating maps.
+// newTestServer starts the real legacy route table on a test server, so these
+// tests exercise the same handlers the browser talks to. The default handler is
+// reset first so each test gets a clean route table rather than accumulating
+// maps, then legacyHandler installs the routes.
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	goweb.SetDefaultHttpHandler(nil)
-	// Mirror what Webserver.init does, or every JSON response is wrapped in an
-	// envelope object and cannot be decoded into the handler's own structs.
-	(&Webserver{}).turnOffAutoEnvelop()
-	mapRoutes()
-	goweb.MapStatic("static/", "static")
-	srv := httptest.NewServer(goweb.DefaultHttpHandler())
+	srv := httptest.NewServer(legacyHandler())
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -341,4 +338,44 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// The solver's own UI must stay reachable and must not live under static/, which
+// `npm run build:static` wipes. This is a regression guard: the frontend build
+// deleted static/index.html once, taking the original UI with it.
+func TestLegacySolverUIIsServed(t *testing.T) {
+	srv := newTestServer(t)
+	for _, path := range []string{"/legacy-static/index.html", "/legacy-static/ui2.html"} {
+		res, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatalf("get %s: %v", path, err)
+		}
+		blob, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Errorf("%s status = %d, want 200", path, res.StatusCode)
+			continue
+		}
+		if len(blob) < 1000 {
+			t.Errorf("%s is suspiciously small (%d bytes)", path, len(blob))
+		}
+	}
+
+	// static/ belongs to the SvelteKit build, so its index.html must be the SPA
+	// shell, not a copy of the original solver page. (The build wipes static/,
+	// which is exactly why the legacy UI was moved out of it.)
+	blob, err := os.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatalf("read static/index.html: %v", err)
+	}
+	if strings.Contains(string(blob), "puzzle/stream") {
+		t.Error("static/index.html is the original solver page, not the SPA shell")
+	}
+	legacy, err := os.ReadFile("legacy-static/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(legacy), "puzzle/stream") {
+		t.Error("legacy-static/index.html is not the original solver UI")
+	}
 }

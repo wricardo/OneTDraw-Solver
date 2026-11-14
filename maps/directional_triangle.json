@@ -1,0 +1,28 @@
+{
+  "id": "directional_triangle",
+  "name": "Directional Triangle",
+  "description": "The triangle again, but one side is one-way: find the corner it must start from.",
+  "difficulty": "easy",
+  "Edges": [
+    {
+      "PointA": 1,
+      "PointB": 2,
+      "Count": 1,
+      "Direction": {
+        "From": 1,
+        "To": 2,
+        "Unidirectional": true
+      }
+    },
+    {
+      "PointA": 2,
+      "PointB": 3,
+      "Count": 1
+    },
+    {
+      "PointA": 3,
+      "PointB": 1,
+      "Count": 1
+    }
+  ]
+}

@@ -4,196 +4,155 @@ import (
 	"io"
 	"os"
 	"testing"
-
-	"github.com/wricardo/OneTDraw-Solver/solver"
 )
 
-func TestCreatePuzzleByFilename(t *testing.T) {
-	// Create a temporary test file
-	tmpfile, err := os.CreateTemp("", "puzzle*.json")
+// writePuzzle writes a puzzle JSON file and returns its path plus a cleanup.
+func writePuzzle(t *testing.T, content string) string {
+	t.Helper()
+	f, err := os.CreateTemp(t.TempDir(), "puzzle*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
-
-	puzzleJSON := `{"Edges": [{"PointA": 1, "PointB": 2, "Count": 1}]}`
-	if _, err := tmpfile.Write([]byte(puzzleJSON)); err != nil {
+	if _, err := f.Write([]byte(content)); err != nil {
+		f.Close()
 		t.Fatal(err)
 	}
-	if err := tmpfile.Close(); err != nil {
+	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-
-	// Test createPuzzleByFilename
-	filename := tmpfile.Name()
-	puzzle, err := createPuzzleByFilename(&filename)
-
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-
-	if puzzle == nil {
-		t.Error("Expected puzzle to be created, got nil")
-	}
-
-	if len(puzzle.Edges) != 1 {
-		t.Errorf("Expected 1 edge, got %d", len(puzzle.Edges))
-	}
+	return f.Name()
 }
 
-func TestCreatePuzzleByFilenameInvalidFile(t *testing.T) {
-	filename := "nonexistent.json"
-	puzzle, _ := createPuzzleByFilename(&filename)
-
-	// Function doesn't return error for missing file (uses _ for error)
-	// but should still handle it gracefully
-	if puzzle == nil {
-		// This is expected behavior
-		t.Log("Correctly handled non-existent file")
-	}
-}
-
-func TestGetPrinter(t *testing.T) {
-	// Test JSON output
-	output = new(string)
-	*output = "json"
-	printer := getPrinter()
-
-	if _, ok := printer.(solver.JsonPrinter); !ok {
-		t.Error("Expected JsonPrinter for 'json' output")
-	}
-
-	// Test clean output (default)
-	*output = "clean"
-	printer = getPrinter()
-
-	if _, ok := printer.(solver.CleanPrinter); !ok {
-		t.Error("Expected CleanPrinter for 'clean' output")
-	}
-
-	// Test unknown output (should default to clean)
-	*output = "unknown"
-	printer = getPrinter()
-
-	if _, ok := printer.(solver.CleanPrinter); !ok {
-		t.Error("Expected CleanPrinter for unknown output type")
-	}
-}
-
-func TestSolveFile(t *testing.T) {
-	// Create a temporary test file with a simple triangle puzzle
-	tmpfile, err := os.CreateTemp("", "puzzle*.json")
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
-
-	puzzleJSON := `{
-		"Edges": [
-			{"PointA": 1, "PointB": 2, "Count": 1},
-			{"PointA": 2, "PointB": 3, "Count": 1},
-			{"PointA": 3, "PointB": 1, "Count": 1}
-		]
-	}`
-	if _, err := tmpfile.Write([]byte(puzzleJSON)); err != nil {
-		t.Fatal(err)
-	}
-	if err := tmpfile.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// Initialize flags
-	count_only = new(bool)
-	output = new(string)
-
-	// Test with count_only = true
-	*count_only = true
-	*output = "json"
-
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
 	os.Stdout = w
+	defer func() { os.Stdout = old }()
 
-	solveFile(tmpfile.Name())
+	fn()
 
-	w.Close()
-	out, _ := io.ReadAll(r)
-	os.Stdout = oldStdout
-
-	// Triangle puzzle should have 6 solutions
-	result := string(out)
-	if result != "6\n" {
-		t.Errorf("Expected '6\\n', got '%s'", result)
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestMainFlags(t *testing.T) {
-	// This test verifies that the flag variables are initialized
-	// We can't easily test the main() function itself due to flag.Parse()
-
-	// Create new flags for testing
-	testCountOnly := false
-	testOutput := "clean"
-
-	if testOutput != "clean" {
-		t.Error("Default output should be 'clean'")
-	}
-
-	if testCountOnly != false {
-		t.Error("Default count_only should be false")
-	}
-}
-
-// Benchmark test
-func BenchmarkCreatePuzzleByFilename(b *testing.B) {
-	// Create a temporary test file
-	tmpfile, err := os.CreateTemp("", "puzzle*.json")
+	blob, err := io.ReadAll(r)
 	if err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	return string(blob)
+}
 
-	puzzleJSON := `{
-		"Edges": [
-			{"PointA": 1, "PointB": 2, "Count": 1},
-			{"PointA": 2, "PointB": 3, "Count": 1},
-			{"PointA": 3, "PointB": 1, "Count": 1}
-		]
-	}`
-	if _, err := tmpfile.Write([]byte(puzzleJSON)); err != nil {
-		b.Fatal(err)
-	}
-	if err := tmpfile.Close(); err != nil {
-		b.Fatal(err)
-	}
+const trianglePuzzle = `{
+  "Edges": [
+    {"PointA": 1, "PointB": 2, "Count": 1},
+    {"PointA": 2, "PointB": 3, "Count": 1},
+    {"PointA": 3, "PointB": 1, "Count": 1}
+  ]
+}`
 
-	filename := tmpfile.Name()
+// TestSolveFileCountOnly checks that the CLI mode still counts a classic
+// puzzle's walks, which is the behaviour the original tool shipped.
+func TestSolveFileCountOnly(t *testing.T) {
+	path := writePuzzle(t, trianglePuzzle)
+
+	// Point the flag vars at local values; solveFile reads them.
+	oldCount, oldOut := *countOnly, *output
+	t.Cleanup(func() {
+		*countOnly, *output = oldCount, oldOut
+	})
+	*countOnly = true
+	*output = "json"
+
+	got := captureStdout(t, func() { solveFile(path) })
+	// A triangle drawn in one stroke has one distinct picture in each of two
+	// rotation directions times two directions per start, so six walks.
+	if got != "6\n" {
+		t.Errorf("stdout = %q, want %q", got, "6\n")
+	}
+}
+
+// TestSolveFilePrintsSolutionsInCleanForm checks the default output shape.
+func TestSolveFileCleanOutput(t *testing.T) {
+	path := writePuzzle(t, trianglePuzzle)
+
+	oldCount, oldOut := *countOnly, *output
+	t.Cleanup(func() {
+		*countOnly, *output = oldCount, oldOut
+	})
+	*countOnly = false
+	*output = "clean"
+
+	got := captureStdout(t, func() { solveFile(path) })
+	if got == "" {
+		t.Fatal("clean output printed nothing")
+	}
+	// Each walk is printed as "a - b - c" on its own line.
+	if lines := countLines(got); lines != 6 {
+		t.Errorf("printed %d walks, want 6", lines)
+	}
+}
+
+// TestSolveFileJSONOutput checks that -output json emits a JSON array.
+func TestSolveFileJSONOutput(t *testing.T) {
+	path := writePuzzle(t, trianglePuzzle)
+
+	oldCount, oldOut := *countOnly, *output
+	t.Cleanup(func() {
+		*countOnly, *output = oldCount, oldOut
+	})
+	*countOnly = false
+	*output = "json"
+
+	got := captureStdout(t, func() { solveFile(path) })
+	if len(got) == 0 || got[0] != '[' {
+		t.Errorf("json output = %q, want a JSON array", got)
+	}
+}
+
+func countLines(s string) int {
+	n := 0
+	for _, c := range s {
+		if c == '\n' {
+			n++
+		}
+	}
+	return n
+}
+
+// TestShippedPuzzlesStillLoad guards the CLI mode against the bundle being
+// deleted or renamed out from under it.
+func TestShippedPuzzlesStillLoad(t *testing.T) {
+	entries, err := os.ReadDir("puzzles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("puzzles/ is empty")
+	}
+}
+
+func BenchmarkSolveFileCountOnly(b *testing.B) {
+	path := writePuzzle(&testing.T{}, trianglePuzzle)
+	oldCount := *countOnly
+	defer func() { *countOnly = oldCount }()
+	*countOnly = true
+
 	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
-		createPuzzleByFilename(&filename)
+		// The analysis line goes to stderr; stdout is redirected so the
+		// benchmark's own output stays readable.
+		old := os.Stdout
+		devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		if err == nil {
+			os.Stdout = devnull
+		}
+		solveFile(path) //nolint:errcheck // the CLI exits on error
+		os.Stdout = old
+		if devnull != nil {
+			devnull.Close()
+		}
 	}
-}
-
-// Test helper function
-func createTestPuzzleFile(content string) (string, func()) {
-	tmpfile, err := os.CreateTemp("", "puzzle*.json")
-	if err != nil {
-		panic(err)
-	}
-
-	if _, err := tmpfile.Write([]byte(content)); err != nil {
-		panic(err)
-	}
-
-	if err := tmpfile.Close(); err != nil {
-		panic(err)
-	}
-
-	cleanup := func() {
-		os.Remove(tmpfile.Name())
-	}
-
-	return tmpfile.Name(), cleanup
 }
