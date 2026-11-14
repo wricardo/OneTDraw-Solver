@@ -6,25 +6,22 @@ A high-performance Go-based algorithm implementation that solves OneTDraw puzzle
 
 ## Features
 
-- **High-Performance Solver**: Uses concurrent goroutines with recursive backtracking to explore all possible solutions
-- **Web Interface**: Interactive canvas-based puzzle visualization and solving
+- **High-Performance Solver**: concurrent goroutines with recursive backtracking and dead-branch pruning, so puzzles with 90k+ solutions finish in well under a second
+- **Bounded and cancellable searches**: every search accepts a time budget, a solution cap, and a stop signal, and reports whether it can be trusted as complete
+- **Web Interface**: interactive graph visualization with live progress while searching, a Stop button, route-by-route playback, and a paged gallery of solutions
+- **Pre-flight analysis**: tells you before solving whether a single path can exist at all, and where it must start (Euler parity and connectivity)
 - **Multiple Output Formats**: Clean text or JSON output
 - **Flexible Puzzle Format**: JSON-based puzzle definition with support for directional constraints
-- **Comprehensive Test Suite**: Built with benchmarking capabilities
+- **Comprehensive Test Suite**: unit tests, route tests, and benchmarking
 
 ## How It Works
 
-The solver uses parallel goroutines to simultaneously explore all possible starting points in a graph. Each goroutine performs depth-first search with backtracking to find valid paths that traverse all edges exactly as specified. Solutions are collected thread-safely and deduplicated before output.
+The solver runs one goroutine per starting point, each doing depth-first search with backtracking. Two things make it fast on large puzzles:
 
-## Installation
+- **Dead-branch pruning**: after every step it checks whether the edges still owed can all still be reached. If the unused edges have split into two disconnected groups, no continuation can cover them all, so the whole subtree is abandoned. This only discards branches with provably zero completions, so the solutions found are unchanged.
+- **Bounded search**: a search can be limited by time, by a solution cap, or cancelled outright. Because these puzzles produce astronomically many walks on the larger levels, the web UI streams progress while searching and lets you stop, instead of blocking on a request that may never finish.
 
-This is a GOPATH-style Go project. Clone and run:
-
-```bash
-git clone https://github.com/wricardo/OneTDraw-Solver.git
-cd OneTDraw-Solver
-go get -d ./...
-```
+Solutions are also deduplicated: two walks that draw the same lines (one being the other reversed, or — for closed tours — a rotation of it) count once.
 
 ## Usage
 
@@ -37,9 +34,9 @@ go run main.go
 # Server starts on http://localhost:8090
 ```
 
-### Command Line Solving
+The UI shows the graph with a pre-flight analysis, then streams the search with live progress. Pick a search budget from the toolbar, and press **Stop** at any time — the routes found so far are kept.
 
-Solve a specific puzzle file:
+### Command Line Solving
 
 ```bash
 # Solve and show all solutions
@@ -48,12 +45,14 @@ go run main.go -solve puzzles/house.json
 # Count solutions only
 go run main.go -solve puzzles/house.json -count_only
 
+# Stop after 10s and report what was found (useful for the biggest levels)
+go run main.go -solve puzzles/level54.json -count_only -budget 10s
+
 # JSON output format
 go run main.go -solve puzzles/house.json -output json
-
-# Limit CPU usage (disable multi-core processing)
-go run main.go -maxprocs=false
 ```
+
+The CLI prints a one-line analysis to stderr and keeps stdout clean, so `-count_only` and `-output json` stay machine-readable. If a search does not finish within `-budget`, the count is reported as a lower bound.
 
 ### Puzzle Format
 
@@ -116,11 +115,24 @@ goimports -w .
 
 ## Architecture
 
-- **`solver/`**: Core solving algorithm and solution handling
-- **`webserver.go`**: HTTP server with puzzle API
-- **`routes.go`**: Web API endpoints
-- **`static/ui2.html`**: Canvas-based puzzle visualization
-- **`puzzles/`**: Example puzzle definitions
+- **`solver/`**: core algorithm. `solver.go` holds the search and its bounds, `analyze.go` holds the pre-flight analysis and solution deduplication
+- **`webserver.go`**: HTTP server
+- **`routes.go`**: the API, including the streaming solve/count endpoints
+- **`static/index.html`**: the UI, a single self-contained page (no external CDNs)
+- **`puzzles/`**: example puzzle definitions
+
+### API
+
+| Route | Purpose |
+| --- | --- |
+| `GET /puzzles` | Puzzle list, each with its size and solvability verdict |
+| `GET /puzzle/data/{name}` | Geometry plus analysis, for drawing the board |
+| `GET /puzzle/stream/{name}` | NDJSON stream: `progress`/`heartbeat` lines, then a `result` line |
+| `GET /puzzle/solve/{name}` | One-shot JSON result |
+| `GET /puzzle/count/{name}` | NDJSON stream of an exhaustive count |
+| `POST /puzzle/stop/{session}` | Ask a running stream to finish early and still return its results |
+
+Both streaming routes accept `?budgetMs=`, and `/puzzle/stream/` also accepts `?limit=`. A stream is cancelled automatically if the client disconnects, so an abandoned tab does not leave a search burning CPU.
 
 ## Contributing
 

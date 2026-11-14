@@ -24,10 +24,13 @@ func (this *Webserver) init() {
 	goweb.MapStatic("static/", "static")
 
 	s := &http.Server{
-		Addr:           this.Address,
-		Handler:        goweb.DefaultHttpHandler(),
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
+		Addr:        this.Address,
+		Handler:     goweb.DefaultHttpHandler(),
+		ReadTimeout: 10 * time.Second,
+		// No WriteTimeout: solving a large puzzle legitimately takes longer than
+		// a normal request, and a write deadline here silently truncates the
+		// response mid-body instead of reporting the delay. The solve routes
+		// enforce their own search budget and honour client disconnects.
 		MaxHeaderBytes: 1 << 20,
 	}
 

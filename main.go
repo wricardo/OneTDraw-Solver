@@ -6,18 +6,21 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/wricardo/OneTDraw-Solver/solver"
 )
 
 var count_only *bool
 var output *string
+var budget *time.Duration
 
 func main() {
 	var maxprocs = flag.Bool("maxprocs", true, "Pass false to NOT use all CPU cores available")
 	var puzzle_file_path = flag.String("solve", "", "File path to puzzle to solve")
 	count_only = flag.Bool("count_only", false, "Pass true to display only the count of possible solutions")
 	output = flag.String("output", "clean", "Format of the output. [clean,json]")
+	budget = flag.Duration("budget", 0, "Stop after this long and print what was found, e.g. -budget 10s (0 = no limit)")
 	flag.Parse()
 
 	if *maxprocs == true {
@@ -47,17 +50,43 @@ func getPrinter() solver.SolutionPrinter {
 	}
 }
 
+// budgetOrZero returns the CLI budget, tolerating a nil flag so the helper stays
+// callable from tests that only initialise the flags they care about.
+func budgetOrZero() time.Duration {
+	if budget == nil {
+		return 0
+	}
+	return *budget
+}
+
 func solveFile(puzzle_file_path string) {
 	puzzle, err := createPuzzleByFilename(&puzzle_file_path)
 	if err != nil {
 		log.Fatalf("Error loading puzzle: %v", err)
 	}
+
+	// The analysis goes to stderr so it never corrupts the machine-readable
+	// stdout that -count_only and -output json produce.
+	fmt.Fprintf(os.Stderr, "%s\n", solver.Analyze(puzzle))
+
 	if *count_only {
-		fmt.Println(solver.GetNumberOfSolutions(puzzle))
-	} else {
-		solutions := solver.Solve(puzzle)
-		solutions.Print(getPrinter())
+		count, stats := solver.CountWith(puzzle, budgetOrZero(), nil)
+		if stats.Exhaustive {
+			fmt.Println(count)
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Count incomplete after %v: at least %d walks (%d branches)\n",
+			stats.Elapsed.Round(time.Millisecond), count, stats.Visited)
+		fmt.Println(count)
+		return
 	}
+
+	solutions, stats := solver.SolveWith(puzzle, 0, budgetOrZero(), nil, nil)
+	if !stats.Exhaustive {
+		fmt.Fprintf(os.Stderr, "Search incomplete after %v: %d walks found, %d branches explored\n",
+			stats.Elapsed.Round(time.Millisecond), len(*solutions), stats.Visited)
+	}
+	solutions.Print(getPrinter())
 }
 
 func setupWebServer() {
