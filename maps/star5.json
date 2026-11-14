@@ -1,0 +1,50 @@
+{
+  "id": "star5",
+  "name": "Five-Point Star",
+  "description": "A hub joined to four leaves, every spoke doubled. Each arm is an out-and-back, so the hub is the only place to turn.",
+  "difficulty": "medium",
+  "Points": [
+    {
+      "Point": 1,
+      "Level": 1
+    },
+    {
+      "Point": 2,
+      "Level": 3
+    },
+    {
+      "Point": 3,
+      "Level": 1
+    },
+    {
+      "Point": 4,
+      "Level": 3
+    },
+    {
+      "Point": 5,
+      "Level": 2
+    }
+  ],
+  "Edges": [
+    {
+      "PointA": 1,
+      "PointB": 5,
+      "Count": 2
+    },
+    {
+      "PointA": 2,
+      "PointB": 5,
+      "Count": 2
+    },
+    {
+      "PointA": 3,
+      "PointB": 5,
+      "Count": 2
+    },
+    {
+      "PointA": 4,
+      "PointB": 5,
+      "Count": 2
+    }
+  ]
+}

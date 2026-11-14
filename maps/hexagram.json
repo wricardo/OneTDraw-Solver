@@ -1,0 +1,124 @@
+{
+  "id": "hexagram",
+  "name": "Hexagram",
+  "description": "All fifteen chords of six points, with the parity repair doubling two of them and a one-way chain buried at the centre. Every point is reachable from every other, so nothing prunes the search for you.",
+  "difficulty": "hard",
+  "Points": [
+    {
+      "Point": 1,
+      "Level": 1
+    },
+    {
+      "Point": 2,
+      "Level": 2
+    },
+    {
+      "Point": 3,
+      "Level": 1
+    },
+    {
+      "Point": 4,
+      "Level": 2
+    },
+    {
+      "Point": 5,
+      "Level": 1
+    },
+    {
+      "Point": 6,
+      "Level": 2
+    }
+  ],
+  "Edges": [
+    {
+      "PointA": 1,
+      "PointB": 2,
+      "Count": 1,
+      "Direction": {
+        "From": 1,
+        "To": 2,
+        "Unidirectional": true
+      }
+    },
+    {
+      "PointA": 1,
+      "PointB": 3,
+      "Count": 2
+    },
+    {
+      "PointA": 1,
+      "PointB": 4,
+      "Count": 1
+    },
+    {
+      "PointA": 1,
+      "PointB": 5,
+      "Count": 1
+    },
+    {
+      "PointA": 1,
+      "PointB": 6,
+      "Count": 1
+    },
+    {
+      "PointA": 2,
+      "PointB": 3,
+      "Count": 1,
+      "Direction": {
+        "From": 2,
+        "To": 3,
+        "Unidirectional": true
+      }
+    },
+    {
+      "PointA": 2,
+      "PointB": 4,
+      "Count": 2
+    },
+    {
+      "PointA": 2,
+      "PointB": 5,
+      "Count": 1
+    },
+    {
+      "PointA": 2,
+      "PointB": 6,
+      "Count": 1
+    },
+    {
+      "PointA": 3,
+      "PointB": 4,
+      "Count": 1,
+      "Direction": {
+        "From": 3,
+        "To": 4,
+        "Unidirectional": true
+      }
+    },
+    {
+      "PointA": 3,
+      "PointB": 5,
+      "Count": 1
+    },
+    {
+      "PointA": 3,
+      "PointB": 6,
+      "Count": 1
+    },
+    {
+      "PointA": 4,
+      "PointB": 5,
+      "Count": 1
+    },
+    {
+      "PointA": 4,
+      "PointB": 6,
+      "Count": 1
+    },
+    {
+      "PointA": 5,
+      "PointB": 6,
+      "Count": 1
+    }
+  ]
+}

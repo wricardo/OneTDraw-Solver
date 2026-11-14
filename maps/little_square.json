@@ -1,0 +1,51 @@
+{
+  "id": "little_square",
+  "name": "Little Square",
+  "description": "A square with one doubled diagonal. Every corner has even degree, so the loop closes wherever it starts.",
+  "difficulty": "easy",
+  "Points": [
+    {
+      "Point": 1,
+      "Level": 2
+    },
+    {
+      "Point": 2,
+      "Level": 1
+    },
+    {
+      "Point": 3,
+      "Level": 2
+    },
+    {
+      "Point": 4,
+      "Level": 3
+    }
+  ],
+  "Edges": [
+    {
+      "PointA": 1,
+      "PointB": 2,
+      "Count": 1
+    },
+    {
+      "PointA": 2,
+      "PointB": 3,
+      "Count": 1
+    },
+    {
+      "PointA": 3,
+      "PointB": 4,
+      "Count": 1
+    },
+    {
+      "PointA": 4,
+      "PointB": 1,
+      "Count": 1
+    },
+    {
+      "PointA": 1,
+      "PointB": 3,
+      "Count": 2
+    }
+  ]
+}

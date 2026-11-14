@@ -1,0 +1,93 @@
+{
+  "id": "hourglass",
+  "name": "Hourglass",
+  "description": "Two trapezoids meeting at a waist. The lower waist edge must be drawn twice and the climb out of the bottom is one-way, so the sand only runs one direction.",
+  "difficulty": "medium",
+  "Points": [
+    {
+      "Point": 1,
+      "Level": 1
+    },
+    {
+      "Point": 2,
+      "Level": 1
+    },
+    {
+      "Point": 6,
+      "Level": 2
+    },
+    {
+      "Point": 3,
+      "Level": 3
+    },
+    {
+      "Point": 4,
+      "Level": 4
+    },
+    {
+      "Point": 5,
+      "Level": 4
+    },
+    {
+      "Point": 7,
+      "Level": 5
+    }
+  ],
+  "Edges": [
+    {
+      "PointA": 1,
+      "PointB": 6,
+      "Count": 1
+    },
+    {
+      "PointA": 2,
+      "PointB": 6,
+      "Count": 1
+    },
+    {
+      "PointA": 1,
+      "PointB": 3,
+      "Count": 1
+    },
+    {
+      "PointA": 2,
+      "PointB": 3,
+      "Count": 1
+    },
+    {
+      "PointA": 6,
+      "PointB": 3,
+      "Count": 1
+    },
+    {
+      "PointA": 4,
+      "PointB": 3,
+      "Count": 1
+    },
+    {
+      "PointA": 5,
+      "PointB": 3,
+      "Count": 1,
+      "Direction": {
+        "From": 5,
+        "To": 3,
+        "Unidirectional": true
+      }
+    },
+    {
+      "PointA": 7,
+      "PointB": 4,
+      "Count": 1
+    },
+    {
+      "PointA": 7,
+      "PointB": 5,
+      "Count": 2
+    },
+    {
+      "PointA": 3,
+      "PointB": 7,
+      "Count": 1
+    }
+  ]
+}

@@ -1,0 +1,196 @@
+{
+  "id": "switchback",
+  "name": "Switchback",
+  "description": "A fourteen-point ladder folded with four cross-chords. The repeated middle rung and the one-way descent decide the start and the finish.",
+  "difficulty": "hard",
+  "Points": [
+    {
+      "Point": 1,
+      "Level": 1
+    },
+    {
+      "Point": 2,
+      "Level": 1
+    },
+    {
+      "Point": 3,
+      "Level": 1
+    },
+    {
+      "Point": 4,
+      "Level": 1
+    },
+    {
+      "Point": 5,
+      "Level": 1
+    },
+    {
+      "Point": 6,
+      "Level": 1
+    },
+    {
+      "Point": 7,
+      "Level": 1
+    },
+    {
+      "Point": 8,
+      "Level": 2
+    },
+    {
+      "Point": 9,
+      "Level": 2
+    },
+    {
+      "Point": 10,
+      "Level": 2
+    },
+    {
+      "Point": 11,
+      "Level": 2
+    },
+    {
+      "Point": 12,
+      "Level": 2
+    },
+    {
+      "Point": 13,
+      "Level": 2
+    },
+    {
+      "Point": 14,
+      "Level": 2
+    }
+  ],
+  "Edges": [
+    {
+      "PointA": 1,
+      "PointB": 2,
+      "Count": 2
+    },
+    {
+      "PointA": 8,
+      "PointB": 9,
+      "Count": 2
+    },
+    {
+      "PointA": 2,
+      "PointB": 3,
+      "Count": 1
+    },
+    {
+      "PointA": 9,
+      "PointB": 10,
+      "Count": 1
+    },
+    {
+      "PointA": 3,
+      "PointB": 4,
+      "Count": 1
+    },
+    {
+      "PointA": 10,
+      "PointB": 11,
+      "Count": 1
+    },
+    {
+      "PointA": 4,
+      "PointB": 5,
+      "Count": 1
+    },
+    {
+      "PointA": 11,
+      "PointB": 12,
+      "Count": 1
+    },
+    {
+      "PointA": 5,
+      "PointB": 6,
+      "Count": 1,
+      "Direction": {
+        "From": 6,
+        "To": 5,
+        "Unidirectional": true
+      }
+    },
+    {
+      "PointA": 12,
+      "PointB": 13,
+      "Count": 1
+    },
+    {
+      "PointA": 6,
+      "PointB": 7,
+      "Count": 1
+    },
+    {
+      "PointA": 13,
+      "PointB": 14,
+      "Count": 1,
+      "Direction": {
+        "From": 14,
+        "To": 13,
+        "Unidirectional": true
+      }
+    },
+    {
+      "PointA": 1,
+      "PointB": 8,
+      "Count": 1
+    },
+    {
+      "PointA": 2,
+      "PointB": 9,
+      "Count": 1
+    },
+    {
+      "PointA": 3,
+      "PointB": 10,
+      "Count": 1
+    },
+    {
+      "PointA": 4,
+      "PointB": 11,
+      "Count": 2
+    },
+    {
+      "PointA": 5,
+      "PointB": 12,
+      "Count": 1
+    },
+    {
+      "PointA": 6,
+      "PointB": 13,
+      "Count": 1,
+      "Direction": {
+        "From": 13,
+        "To": 6,
+        "Unidirectional": true
+      }
+    },
+    {
+      "PointA": 7,
+      "PointB": 14,
+      "Count": 1
+    },
+    {
+      "PointA": 1,
+      "PointB": 8,
+      "Count": 1
+    },
+    {
+      "PointA": 3,
+      "PointB": 10,
+      "Count": 1
+    },
+    {
+      "PointA": 5,
+      "PointB": 12,
+      "Count": 1
+    },
+    {
+      "PointA": 2,
+      "PointB": 9,
+      "Count": 2
+    }
+  ]
+}
