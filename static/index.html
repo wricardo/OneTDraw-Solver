@@ -660,13 +660,16 @@
 
     boardLayers.edges = svg("g", { class: "edges" });
     boardLayers.path = svg("g", { class: "path" });
+    // Step numbers sit above the path but below the head/nodes, so an edge
+    // crossing one cannot hide it.
+    boardLayers.steps = svg("g", { class: "steps" });
     boardLayers.nodes = svg("g", { class: "nodes" });
     boardLayers.labels = svg("g", { class: "labels" });
     // The head marker needs its own layer above the nodes: the node circles are
     // opaque and would otherwise cover the walk's current position.
     boardLayers.head = svg("g", { class: "head" });
     el.board.append(
-      boardLayers.edges, boardLayers.path, boardLayers.nodes,
+      boardLayers.edges, boardLayers.path, boardLayers.steps, boardLayers.nodes,
       boardLayers.labels, boardLayers.head,
     );
   }
@@ -707,7 +710,7 @@
     if (!d) return;
     el.hint.hidden = true;
     el.legend.hidden = false;
-    clear(boardLayers.edges); clear(boardLayers.path); clear(boardLayers.head);
+    clear(boardLayers.edges); clear(boardLayers.path); clear(boardLayers.head); clear(boardLayers.steps);
     clear(boardLayers.nodes); clear(boardLayers.labels);
 
     const pos = state.layout;
@@ -923,12 +926,38 @@
     const r = NODE_R; // stop at the node's edge
     const x1 = a.x + ux * r, y1 = a.y + uy * r;
     const x2 = b.x - ux * r, y2 = b.y - uy * r;
+    // pointAt samples the drawn segment itself, so a badge placed on it is
+    // always visibly sitting on its own edge.
+    const pointAt = (t) => {
+      if (!bow) {
+        return { x: x1 + (x2 - x1) * t, y: y1 + (y2 - y1) * t };
+      }
+      const cx = (x1 + x2) / 2 + nx * bow;
+      const cy = (y1 + y2) / 2 + ny * bow;
+      const mt = 1 - t;
+      return {
+        x: mt * mt * x1 + 2 * mt * t * cx + t * t * x2,
+        y: mt * mt * y1 + 2 * mt * t * cy + t * t * y2,
+      };
+    };
     if (!bow) {
-      return { kind: "line", attrs: { x1, y1, x2, y2 } };
+      return {
+        kind: "line",
+        attrs: { x1, y1, x2, y2 },
+        mid: pointAt(0.5),
+        pointAt,
+      };
     }
     const cx = (x1 + x2) / 2 + nx * bow;
     const cy = (y1 + y2) / 2 + ny * bow;
-    return { kind: "path", attrs: { d: `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`, fill: "none" } };
+    return {
+      kind: "path",
+      attrs: { d: `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`, fill: "none" },
+      // A quadratic at t=0.5 is 1/4 of each endpoint plus 1/2 the control point,
+      // so the label follows the curve instead of floating beside the chord.
+      mid: pointAt(0.5),
+      pointAt,
+    };
   }
 
   function appendSegment(layer, a, b, bow, attrs, outline) {
@@ -950,8 +979,66 @@
     return el;
   }
 
+  // stepBadge draws a numbered disc at a position. The number is the point of
+  // this: colour alone tells you two steps differ, but not their order, and
+  // reading order off a palette means memorising the key.
+  function stepBadge(layer, x, y, text, fill, r) {
+    const radius = r || 11;
+    layer.appendChild(svg("circle", {
+      cx: x, cy: y, r: radius,
+      fill: fill,
+      stroke: "var(--panel)",
+      "stroke-width": 2.5,
+    }));
+    const t = svg("text", {
+      x, y: y + 1,
+      "text-anchor": "middle",
+      "dominant-baseline": "middle",
+      "font-size": radius * 1.25,
+      "font-weight": 700,
+      "font-family": "var(--mono)",
+      // White on the dark palette entries, near-black on the light ones.
+      fill: readableOn(fill),
+    });
+    t.textContent = text;
+    layer.appendChild(t);
+  }
+
+  // readableOn picks a legible text colour for a known palette swatch, using
+  // relative luminance rather than a fixed guess.
+  // distanceToSegment returns how far a point lies from a drawn segment, so a
+  // badge can avoid spots where other edges pass through it.
+  function distanceToSegment(geom, x, y) {
+    let best = Infinity;
+    for (let u = 0; u <= 1; u += 0.02) {
+      const p = geom.pointAt(u);
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  // readableOn(hex) picks a legible text colour for a palette swatch.
+  //
+  // 0.179 is the relative luminance where black text overtakes white: above it,
+  // black gives the better contrast ratio. The earlier threshold of 0.45 was too
+  // high, which left white digits on orange, ochre, pink and cyan at ratios
+  // between 2.1 and 2.8 — well under the WCAG AA minimum of 4.5.
+  function readableOn(hex) {
+    const h = hex.replace("#", "");
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    const lin = (v) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    };
+    const lum = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    return lum > 0.179 ? "#12171d" : "#ffffff";
+  }
+
   function drawPath() {
-    clear(boardLayers.path); clear(boardLayers.head);
+    clear(boardLayers.path); clear(boardLayers.head); clear(boardLayers.steps);
     const sol = currentSolution();
     if (!sol) return;
     const pos = state.layout;
@@ -962,13 +1049,43 @@
     // mean exactly one thing: "drawn, at this step". Colouring the preview made
     // an undrawn edge look like a drawn one.
     const n = Math.max(1, sol.length - 1);
+
+    // An edge with Count 2 is walked twice, and both passes were drawn on the
+    // same centreline — so the later step's colour painted over the earlier one
+    // and the earlier badge's colour matched nothing on screen. Giving each pass
+    // its own lateral offset (as the base graph does for doubled edges) keeps
+    // both visible. Pass indices are taken from the whole solution, not from the
+    // drawn prefix, so a line does not jump sideways as the user steps forward.
+    const edgeKeyOf = (a, b) => (a < b ? a + "-" + b : b + "-" + a);
+    const passTotals = new Map();
+    for (let i = 0; i < sol.length - 1; i++) {
+      const k = edgeKeyOf(sol[i], sol[i + 1]);
+      passTotals.set(k, (passTotals.get(k) || 0) + 1);
+    }
+    const passSeen = new Map();
+
+    const badges = [];
     for (let i = 0; i < sol.length - 1; i++) {
       const a = pos.get(sol[i]), b = pos.get(sol[i + 1]);
       if (!a || !b) continue;
       const done = i < upto;
       const bow = edgeBow(sol[i], sol[i + 1]);
+
+      const key = edgeKeyOf(sol[i], sol[i + 1]);
+      const total = passTotals.get(key) || 1;
+      const nth = passSeen.get(key) || 0;
+      passSeen.set(key, nth + 1);
+      // Same helper the base graph uses for parallel edges, so a doubled walk
+      // lines up with how that edge is already drawn underneath.
+      const lateral = total > 1 ? edgeOffset(nth, total, 1.6) : 0;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      const a2 = { x: a.x + nx * lateral, y: a.y + ny * lateral };
+      const b2 = { x: b.x + nx * lateral, y: b.y + ny * lateral };
+
       if (!done) {
-        appendSegment(boardLayers.path, a, b, bow, {
+        appendSegment(boardLayers.path, a2, b2, bow, {
           stroke: "color-mix(in srgb, var(--accent) 55%, transparent)",
           "stroke-width": 2.5,
           "stroke-linecap": "round",
@@ -976,13 +1093,74 @@
         });
         continue;
       }
-      appendSegment(boardLayers.path, a, b, bow, {
+      appendSegment(boardLayers.path, a2, b2, bow, {
         stroke: stepColor(i, n),
         "stroke-width": 5,
         "stroke-linecap": "round",
         opacity: 1,
       }, true);
+      badges.push({ i, geom: segmentGeometry(a2, b2, bow) });
     }
+
+    // Numbers are placed after the lines so they are the topmost thing in this
+    // layer.
+    //
+    // Three things make a number hard to read: colliding with another badge,
+    // sitting where an unrelated edge crosses it, and sharing an edge with
+    // another step. The last case is real here — an edge with Count: 2 is
+    // traversed twice, so two different step numbers belong to the same line and
+    // both would land on its midpoint. Candidates are sampled along this edge and
+    // spread by how many same-edge badges came before, so the pair separates.
+    const dense = upto > 12;
+    const badgeR = dense ? 9 : 11;
+    const minGap = badgeR * 2 + 9;
+    const otherEdges = [];
+    for (let j = 0; j < sol.length - 1; j++) {
+      otherEdges.push({ i: j, geom: segmentGeometry(
+        pos.get(sol[j]), pos.get(sol[j + 1]), edgeBow(sol[j], sol[j + 1])) });
+    }
+
+    // How many earlier drawn steps already used this same edge, and how many use
+    // it in total, so repeated traversals get evenly spaced slots.
+    const edgeKey = (a, b) => (a < b ? a + "-" + b : b + "-" + a);
+    const totalOnEdge = new Map();
+    const drawnOnEdge = new Map();
+    for (let i = 0; i < upto; i++) {
+      const k = edgeKey(sol[i], sol[i + 1]);
+      totalOnEdge.set(k, (totalOnEdge.get(k) || 0) + 1);
+    }
+
+    const placed = [];
+    const clearsBadges = (x, y) =>
+      !placed.some((p) => Math.hypot(p.x - x, p.y - y) < minGap);
+    const clearsEdge = (self, x, y) =>
+      !otherEdges.some((o) =>
+        o.i !== self && o.geom && distanceToSegment(o.geom, x, y) < badgeR + 3);
+
+    badges.forEach(({ i, geom }) => {
+      const k = edgeKey(sol[i], sol[i + 1]);
+      const total = totalOnEdge.get(k) || 1;
+      const nth = drawnOnEdge.get(k) || 0;
+      drawnOnEdge.set(k, nth + 1);
+
+      // Slot the nth of `total` badges at (nth+1)/(total+1) along the edge, then
+      // look nearby for a spot that is also clear of crossings.
+      const home = (nth + 1) / (total + 1);
+      const offsets = [0, -0.06, 0.06, -0.12, 0.12, -0.2, 0.2, -0.3, 0.3];
+      let best = null;
+      let bestScore = -Infinity;
+      for (const off of offsets) {
+        const t = Math.min(0.92, Math.max(0.08, home + off));
+        const p = geom.pointAt(t);
+        const okBadge = clearsBadges(p.x, p.y);
+        const okEdge = clearsEdge(i, p.x, p.y);
+        const score = (okBadge ? 100 : 0) + (okEdge ? 50 : 0) - Math.abs(off) * 20;
+        if (score > bestScore) { bestScore = score; best = p; }
+        if (okBadge && okEdge) break;
+      }
+      placed.push(best);
+      stepBadge(boardLayers.steps, best.x, best.y, String(i + 1), stepColor(i, n), badgeR);
+    });
 
     // Segments 0..upto-1 are drawn, so the walk currently stands on sol[upto].
     const headNode = sol[Math.min(upto, sol.length - 1)];
@@ -1257,7 +1435,7 @@
     state.solutionsInfo = null;
     el.legend.hidden = true;
     stopPlayback();
-    clear(el.solGrid); clear(boardLayers.path); clear(boardLayers.head);
+    clear(el.solGrid); clear(boardLayers.path); clear(boardLayers.head); clear(boardLayers.steps);
     el.solCount.textContent = "—";
     el.solNotice.hidden = true;
     el.more.hidden = true;
