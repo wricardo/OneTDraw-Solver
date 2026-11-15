@@ -34,27 +34,45 @@ jobs:
       - name: Build binary (linux/arm64)
         run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /tmp/onetdraw .
 
-      # COPYFILE_DISABLE stops macOS tar emitting AppleDouble ._* resource forks;
-      # those are not JSON and once made the server refuse to start. The flags
-      # must stay portable: GNU tar on the runner has no --no-mac-metadata (that
-      # is BSD tar), so the archive is checked for the junk instead.
+      # COPYFILE_DISABLE stops macOS tools creating AppleDouble ._* resource
+      # forks in the first place; they are not JSON, and one in maps/ once made
+      # the server refuse to start. Belt and braces: the copy step skips any that
+      # exist, and the archive is then checked.
+      #
+      # The listing is captured into a variable rather than piped into grep -q:
+      # grep exits after the first match and SIGPIPEs tar, which `set -o pipefail`
+      # reports as a failure ("tar: stdout: write error").
       - name: Package
         env:
           COPYFILE_DISABLE: 1
         run: |
           set -euo pipefail
+          rm -rf /tmp/pkg
           mkdir -p /tmp/pkg
           cp /tmp/onetdraw /tmp/pkg/
+          # rsync rather than cp so AppleDouble files are excluded by pattern.
           # maps/ and static/ are the game; puzzles/ + legacy-static/ keep the
           # original solver routes and its UI working; solutions/ is docs only.
-          cp -r maps static legacy-static puzzles solutions puzzles.json /tmp/pkg/
+          rsync -a --exclude '._*' --exclude '.DS_Store' \
+            maps static legacy-static puzzles solutions puzzles.json /tmp/pkg/
+          find /tmp/pkg -name '._*' -o -name '.DS_Store' | while read -r f; do
+            echo "refusing to ship a macOS metadata file: $f" >&2
+            exit 1
+          done
           tar czf /tmp/deploy.tgz -C /tmp/pkg .
-          tar tzf /tmp/deploy.tgz | grep -qx './onetdraw'
-          tar tzf /tmp/deploy.tgz | grep -q '^\./maps/' || (echo "maps missing from archive" && exit 1)
-          tar tzf /tmp/deploy.tgz | grep -q '^\./static/index.html$' || (echo "static/index.html missing from archive" && exit 1)
-          if tar tzf /tmp/deploy.tgz | grep -q '/\._'; then
-            echo "archive contains AppleDouble resource forks" && exit 1
-          fi
+          listing="$(tar tzf /tmp/deploy.tgz)"
+          case "$listing" in
+            *"./onetdraw"*) ;;
+            *) echo "binary missing from archive" >&2; exit 1 ;;
+          esac
+          case "$listing" in
+            *"./maps/"*) ;;
+            *) echo "maps missing from archive" >&2; exit 1 ;;
+          esac
+          case "$listing" in
+            *"./static/index.html"*) ;;
+            *) echo "static/index.html missing from archive" >&2; exit 1 ;;
+          esac
 
       - name: Setup SSH
         env:
