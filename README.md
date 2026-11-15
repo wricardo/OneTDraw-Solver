@@ -169,8 +169,12 @@ Repository secrets: `EC2_HOST`, `EC2_SSH_KEY` (a deploy-only key), `EC2_KNOWN_HO
 colorsort, `8085` quickgql, `8086` motor-programming, `8087` mazes, **`8088` one-t-draw**. Pick a
 free one before adding a service.
 
-**Shipping UI changes.** CI does not build the frontend: `static/` is committed, so run
-`make build-frontend` and commit the result. If you skip it, production keeps the old UI.
+**Shipping UI changes.** CI builds the frontend (`npm ci`, `svelte-check`, `npm test`,
+`build:static`) before packaging, so a UI change is deployed as soon as it is pushed — there is no
+"remember to rebuild `static/`" step. `static/` stays committed so the server can be run locally
+without Node; run `make build-frontend` if you want that copy to match. Note that Vite derives chunk
+filenames from the build, so a local rebuild rewrites ~17 files even when the output is
+byte-identical — CI's artifact is the authoritative one.
 
 ## About
 

@@ -53,7 +53,7 @@ HTTP /graphql (api/server.go) → gqlgen resolver (graph/) → service.GameServi
 | `solver/`, `routes.go`, `webserver.go` | the original solver, untouched in behaviour |
 | `validate/`, `cmd/validate` | map + reference-solution checks |
 | `maps/`, `solutions/`, `puzzles/` | data; `sessions/` is runtime, gitignored |
-| `frontend/` | SvelteKit + Tailwind v4; builds into `static/` (committed) |
+| `frontend/` | SvelteKit + Tailwind v4; builds into `static/` (committed, but CI rebuilds it) |
 
 ## Development Commands
 ```bash
