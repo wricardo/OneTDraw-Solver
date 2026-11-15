@@ -1,0 +1,1 @@
+import"./Ctr0ddW4.js";import{i as e,x as t}from"./BQdyTnbX.js";async function n(n,r,i){return(await t(n.mutation(e,{mapID:r,displayName:i||null}))).createSession.id}export{n as t};

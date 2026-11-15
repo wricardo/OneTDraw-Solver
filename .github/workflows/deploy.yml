@@ -29,8 +29,28 @@ jobs:
       - name: Validate maps
         run: go run ./cmd/validate -maps-dir maps -solutions-dir solutions
 
-      # The SvelteKit UI is prebuilt and committed in static/, matching the
-      # sibling games: CI does not build the frontend.
+      # The UI is built here rather than shipped from the committed static/, so a
+      # frontend change can never go out stale. static/ stays committed for local
+      # development and for anyone running the binary without Node.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        run: cd frontend && npm ci
+
+      - name: Check frontend
+        run: cd frontend && npm run check
+
+      - name: Test frontend
+        run: cd frontend && npm test
+
+      # build:static writes into ../static, replacing the committed build.
+      - name: Build frontend
+        run: cd frontend && npm run build:static
+
       - name: Build binary (linux/arm64)
         run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /tmp/onetdraw .
 
