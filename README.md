@@ -137,6 +137,41 @@ then runs a fixed number of deterministic force-relaxation iterations (springs a
 repulsion between all pairs, a weak pull to the seed row). No randomness, so a map looks the same on
 every load and in every client.
 
+## Deployment
+
+Production runs at **https://onetdraw.wricardo.net** on the shared ARM64 Ubuntu EC2 host
+(`184.73.131.85`) alongside the other Dr Brain games, behind nginx with a Let's Encrypt
+certificate.
+
+**Continuous deployment.** Every push to `master` runs `.github/workflows/deploy.yml`: vet, test,
+`cmd/validate`, build a static `linux/arm64` binary, upload it with `maps/`, `static/`, `puzzles/`,
+`legacy-static/`, `solutions/` and `puzzles.json`, unpack into `/opt/onetdraw` (keeping `sessions/`
+and `.env`), restart the service and smoke-test GraphQL. The archive is unpacked to a staging
+directory and verified before the running release is replaced, so a truncated upload cannot leave
+the site with no maps and no UI.
+
+Repository secrets: `EC2_HOST`, `EC2_SSH_KEY` (a deploy-only key), `EC2_KNOWN_HOSTS`.
+
+**One-time host setup** (done; repeat only on a new host):
+
+1. `/opt/onetdraw/` owned by `ubuntu`, with `sessions/` and a `.env` (playground off, a random
+   `ADMIN_API_KEY`, `ALLOWED_ORIGINS` set to the site's http and https origins).
+2. systemd unit `onetdraw.service`: `WorkingDirectory=/opt/onetdraw`,
+   `ExecStart=/opt/onetdraw/onetdraw -host 127.0.0.1 -port 8088 -maps-dir maps -sessions-dir sessions -public-url https://onetdraw.wricardo.net`,
+   `Restart=always`.
+3. nginx `server` block for `onetdraw.wricardo.net` proxying to `127.0.0.1:8088` with WebSocket
+   upgrade headers and a long `proxy_read_timeout`.
+4. DNS at the host, then `sudo certbot --nginx -d onetdraw.wricardo.net --redirect`
+   (`certbot.timer` renews).
+5. The deploy key's public half in `~/.ssh/authorized_keys`, and the three secrets above.
+
+**Ports on this host.** `8080` tesla, `8081`, `8082` impostor, `8083` ai-http-bin, `8084`
+colorsort, `8085` quickgql, `8086` motor-programming, `8087` mazes, **`8088` one-t-draw**. Pick a
+free one before adding a service.
+
+**Shipping UI changes.** CI does not build the frontend: `static/` is committed, so run
+`make build-frontend` and commit the result. If you skip it, production keeps the old UI.
+
 ## About
 
 One T Draw is part of **Dr Brain**, a collection of browser brain games. The original solver was a
