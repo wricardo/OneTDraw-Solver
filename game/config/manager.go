@@ -4,6 +4,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,10 +25,21 @@ type Manager struct {
 
 var _ service.MapStore = (*Manager)(nil)
 
-// NewManager loads every *.json file in dir, creating dir if missing. A file
-// that is not a valid map is skipped with a logged warning rather than failing
-// startup, so one bad file cannot take the whole game down.
+// NewManager loads every *.json file in dir, creating dir if missing.
+//
+// A file that is not a valid map is skipped and logged, not fatal. This runs at
+// process start, so failing the whole load would take the server down over one
+// bad file — including junk a packaging step dropped in (a macOS tar adds
+// AppleDouble `._name.json` siblings to every file, which are not JSON at all).
+// `make validate` and `cmd/validate` are the strict gate; they fail loudly.
+// Set STRICT_MAPS=1 to restore fail-fast behaviour for a deliberate check.
 func NewManager(dir string) (*Manager, error) {
+	return newManager(dir, os.Getenv("STRICT_MAPS") == "1")
+}
+
+// newManager is NewManager with the skip-or-fail policy made explicit, so tests
+// can exercise both without touching the environment.
+func newManager(dir string, strict bool) (*Manager, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create maps dir: %w", err)
 	}
@@ -36,29 +48,54 @@ func NewManager(dir string) (*Manager, error) {
 		return nil, fmt.Errorf("read maps dir: %w", err)
 	}
 	m := &Manager{dir: dir, maps: make(map[string]*engine.Map)}
+	// collect records a bad file: fatal when strict, otherwise logged and skipped.
+	fail := func(path string, err error) error {
+		if strict {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		log.Printf("maps: skipping %s: %v", path, err)
+		return nil
+	}
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		// AppleDouble resource forks from a macOS tar are bytes, not JSON, and
+		// carry no map: ignore them silently rather than warning on every start.
+		if strings.HasPrefix(e.Name(), "._") {
 			continue
 		}
 		path := filepath.Join(dir, e.Name())
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
+			if err := fail(path, err); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		var cfg engine.MapConfig
 		if err := json.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
+			if err := fail(path, err); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		want := strings.TrimSuffix(e.Name(), ".json")
 		if cfg.ID == "" {
 			cfg.ID = want
 		}
 		if cfg.ID != want {
-			return nil, fmt.Errorf("%s: map id %q does not match file name %q", path, cfg.ID, want)
+			if err := fail(path, fmt.Errorf("map id %q does not match file name %q", cfg.ID, want)); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		parsed, err := engine.NewMap(cfg)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
+			if err := fail(path, err); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		m.maps[parsed.ID] = parsed
 	}

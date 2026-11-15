@@ -67,13 +67,24 @@ func TestNewManagerMissingDirIsCreated(t *testing.T) {
 	}
 }
 
+// An id/name mismatch is caught in strict mode; in the default lenient mode the
+// file is skipped and logged so the server still boots. `make validate` runs the
+// strict check, which is where a mismatch must be fixed.
 func TestNewManagerRejectsIDMismatch(t *testing.T) {
 	dir := t.TempDir()
 	cfg := triConfig()
 	cfg.ID = "other"
 	writeMap(t, dir, "tri.json", cfg)
-	if _, err := NewManager(dir); err == nil {
-		t.Fatal("a file whose map id disagrees with its name should be rejected")
+	if _, err := newManager(dir, true); err == nil {
+		t.Fatal("strict mode should reject a map whose id disagrees with its file name")
+	}
+	// Lenient mode (the default at runtime) skips it instead of failing.
+	mgr, err := newManager(dir, false)
+	if err != nil {
+		t.Fatalf("lenient mode should skip the file, not fail: %v", err)
+	}
+	if len(mgr.List()) != 0 {
+		t.Errorf("the mismatched map was loaded: %d maps", len(mgr.List()))
 	}
 }
 
@@ -166,4 +177,88 @@ func TestConcurrentGetDuringSave(t *testing.T) {
 		}
 	}
 	<-done
+}
+
+// A corrupt map file must not take the server down. This is not hypothetical:
+// deploying from macOS put AppleDouble `._name.json` siblings in maps/ and the
+// service crash-looped at startup, so the skip path is load-bearing.
+func TestBadMapIsSkippedNotFatal(t *testing.T) {
+	dir := t.TempDir()
+	writeMap(t, dir, "tri.json", triConfig())
+	// A binary resource-fork file, exactly what tar from macOS leaves behind.
+	if err := os.WriteFile(filepath.Join(dir, "._tri.json"), []byte{0x00, 0x05, 0x16, 0x07, 0x00, 0xff}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A file that looks like JSON but is not a map.
+	if err := os.WriteFile(filepath.Join(dir, "broken.json"), []byte(`{"id":"broken"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr, err := newManager(dir, false)
+	if err != nil {
+		t.Fatalf("one bad map must not fail the load: %v", err)
+	}
+	if got := len(mgr.List()); got != 1 {
+		t.Errorf("loaded %d maps, want just the valid one", got)
+	}
+	if _, err := mgr.Get("tri"); err != nil {
+		t.Errorf("the valid map was not loaded: %v", err)
+	}
+}
+
+func TestAppleDoubleFilesAreIgnoredSilently(t *testing.T) {
+	// These are tar noise, not user error: no map, no warning, no failure.
+	dir := t.TempDir()
+	writeMap(t, dir, "tri.json", triConfig())
+	for _, name := range []string{"._tri.json", "._maps.json"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte{0x00, 0x01}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mgr, err := newManager(dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(mgr.List()); got != 1 {
+		t.Errorf("loaded %d maps, want 1", got)
+	}
+}
+
+func TestStrictModeFailsOnABadMap(t *testing.T) {
+	// STRICT_MAPS=1 restores fail-fast for a deliberate check in CI.
+	dir := t.TempDir()
+	writeMap(t, dir, "tri.json", triConfig())
+	if err := os.WriteFile(filepath.Join(dir, "broken.json"), []byte(`{not json`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := newManager(dir, true); err == nil {
+		t.Fatal("strict mode accepted a corrupt map")
+	}
+}
+
+func TestStrictModeStillIgnoresAppleDouble(t *testing.T) {
+	// Resource forks are never maps, so strict mode skips them too.
+	dir := t.TempDir()
+	writeMap(t, dir, "tri.json", triConfig())
+	if err := os.WriteFile(filepath.Join(dir, "._tri.json"), []byte{0x00}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mgr, err := newManager(dir, true)
+	if err != nil {
+		t.Fatalf("strict mode should ignore AppleDouble files: %v", err)
+	}
+	if len(mgr.List()) != 1 {
+		t.Errorf("got %d maps, want 1", len(mgr.List()))
+	}
+}
+
+func TestEmptyMapsDirStartsUp(t *testing.T) {
+	// A fresh host with no maps must still serve the UI rather than refuse to boot.
+	mgr, err := NewManager(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mgr.List()) != 0 {
+		t.Errorf("expected no maps, got %d", len(mgr.List()))
+	}
 }

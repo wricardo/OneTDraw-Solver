@@ -1,0 +1,123 @@
+name: Deploy
+
+# Deploys on every push to master (this repository's default branch) or on
+# demand. Modeled on the sibling Dr Brain games so the host stays uniform.
+"on":
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Test, Build and Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # A bad map or a corrupt session file must be caught here, not by a
+      # restart loop on the host. STRICT_MAPS makes map loading fail-fast, which
+      # is exactly what we want before shipping (the server itself is lenient).
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Validate maps
+        run: go run ./cmd/validate -maps-dir maps -solutions-dir solutions
+
+      # The SvelteKit UI is prebuilt and committed in static/, matching the
+      # sibling games: CI does not build the frontend.
+      - name: Build binary (linux/arm64)
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /tmp/onetdraw .
+
+      # tar --no-xattrs/--no-mac-metadata and COPYFILE_DISABLE matter when the
+      # archive is made off a macOS runner: AppleDouble ._* files are not JSON
+      # and once made the server refuse to start.
+      - name: Package
+        env:
+          COPYFILE_DISABLE: 1
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pkg
+          cp /tmp/onetdraw /tmp/pkg/
+          # maps/ and static/ are the game; puzzles/ + legacy-static/ keep the
+          # original solver routes and its UI working; solutions/ is docs only.
+          cp -r maps static legacy-static puzzles solutions puzzles.json /tmp/pkg/
+          tar --no-xattrs --no-mac-metadata -czf /tmp/deploy.tgz -C /tmp/pkg .
+          tar tzf /tmp/deploy.tgz | grep -q './onetdraw'
+          tar tzf /tmp/deploy.tgz | grep -q './maps/' || (echo "maps missing from archive" && exit 1)
+
+      - name: Setup SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          : "${EC2_HOST:?missing EC2_HOST secret}"
+          : "${EC2_SSH_KEY:?missing EC2_SSH_KEY secret}"
+          : "${EC2_KNOWN_HOSTS:?missing EC2_KNOWN_HOSTS secret}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host deploy
+            HostName $EC2_HOST
+            User ubuntu
+            IdentityFile ~/.ssh/deploy_key
+            BatchMode yes
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: Upload
+        run: scp /tmp/deploy.tgz deploy:/tmp/onetdraw-deploy.tgz
+
+      # Systemd unit, nginx vhost and /opt/onetdraw/.env are provisioned once on
+      # the host; this step only swaps the release. sessions/ and .env are kept.
+      #
+      # The old release is unpacked to a staging directory first and only then
+      # swapped in, so a truncated or corrupt upload cannot leave the site with
+      # no maps and no UI.
+      - name: Install and restart
+        run: |
+          ssh deploy '
+            set -euo pipefail
+            cd /opt/onetdraw
+            rm -rf .next-release
+            mkdir -p .next-release
+            tar xzf /tmp/onetdraw-deploy.tgz -C .next-release
+            rm -f /tmp/onetdraw-deploy.tgz
+            # Verify the payload before discarding the running release.
+            test -x .next-release/onetdraw
+            test -n "$(ls -A .next-release/maps/*.json 2>/dev/null)"
+            test -f .next-release/static/index.html
+            rm -rf maps static legacy-static puzzles solutions puzzles.json onetdraw
+            cp -a .next-release/. .
+            rm -rf .next-release
+            mkdir -p sessions
+            chmod +x onetdraw
+            sudo systemctl restart onetdraw.service
+            systemctl is-active onetdraw.service
+          '
+
+      - name: Smoke test
+        run: |
+          ssh deploy '
+            for attempt in $(seq 1 12); do
+              if curl -fsS http://127.0.0.1:8088/graphql \
+                -H "content-type: application/json" \
+                --data "{\"query\":\"query { maps { id } }\"}" | grep -q "\"maps\""; then
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "GraphQL did not come up; recent service log:" >&2
+            sudo journalctl -u onetdraw.service -n 30 --no-pager >&2
+            exit 1
+          '
