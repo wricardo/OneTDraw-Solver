@@ -34,9 +34,10 @@ jobs:
       - name: Build binary (linux/arm64)
         run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /tmp/onetdraw .
 
-      # tar --no-xattrs/--no-mac-metadata and COPYFILE_DISABLE matter when the
-      # archive is made off a macOS runner: AppleDouble ._* files are not JSON
-      # and once made the server refuse to start.
+      # COPYFILE_DISABLE stops macOS tar emitting AppleDouble ._* resource forks;
+      # those are not JSON and once made the server refuse to start. The flags
+      # must stay portable: GNU tar on the runner has no --no-mac-metadata (that
+      # is BSD tar), so the archive is checked for the junk instead.
       - name: Package
         env:
           COPYFILE_DISABLE: 1
@@ -47,9 +48,13 @@ jobs:
           # maps/ and static/ are the game; puzzles/ + legacy-static/ keep the
           # original solver routes and its UI working; solutions/ is docs only.
           cp -r maps static legacy-static puzzles solutions puzzles.json /tmp/pkg/
-          tar --no-xattrs --no-mac-metadata -czf /tmp/deploy.tgz -C /tmp/pkg .
-          tar tzf /tmp/deploy.tgz | grep -q './onetdraw'
-          tar tzf /tmp/deploy.tgz | grep -q './maps/' || (echo "maps missing from archive" && exit 1)
+          tar czf /tmp/deploy.tgz -C /tmp/pkg .
+          tar tzf /tmp/deploy.tgz | grep -qx './onetdraw'
+          tar tzf /tmp/deploy.tgz | grep -q '^\./maps/' || (echo "maps missing from archive" && exit 1)
+          tar tzf /tmp/deploy.tgz | grep -q '^\./static/index.html$' || (echo "static/index.html missing from archive" && exit 1)
+          if tar tzf /tmp/deploy.tgz | grep -q '/\._'; then
+            echo "archive contains AppleDouble resource forks" && exit 1
+          fi
 
       - name: Setup SSH
         env:
